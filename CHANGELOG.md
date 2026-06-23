@@ -1,0 +1,19 @@
+# Changelog
+
+All notable changes to the Paymos for CS-Cart add-on are documented here.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
+this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+The public release history also lives at [paymos.io/changelog](https://paymos.io/changelog).
+
+## [1.0.0] - 2026-06-22
+
+### Added
+- Initial release.
+- USDT and USDC payments across 13 mainnet networks via the hosted Paymos checkout.
+- Payment processor add-on for CS-Cart 4.20+.
+- Pre-registered webhook endpoint with HMAC-SHA256 (`X-Webhook-Signature`) verification and reverse-verification of terminal events.
+- Idempotent webhook processing: a short event reservation that commits to the full TTL only after the order update succeeds, so a crash mid-flight self-heals in ~5 minutes instead of blacklisting the event.
+- Checkout always re-confirms against the server (idempotent on the order id), so a buyer never lands on a dead page after an invoice expires or is cancelled.
+- API credentials and signing secret pre-injected by the dashboard ZIP generator (the merchant types nothing).
+- Sandbox / Live mode switch in the CS-Cart admin.

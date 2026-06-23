@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<addon scheme="3.0" edition_type="ROOT,ULT:VENDOR">
+    <id>paymos</id>
+    <version>1.0.0</version>
+    <priority>100500</priority>
+    <status>active</status>
+    <auto_install>ULTIMATE,MULTIVENDOR</auto_install>
+    <default_language>en</default_language>
+    <name>Paymos Payments</name>
+    <description>Paymos hosted checkout payment processor.</description>
+    <queries>
+        <item for="install">
+            CREATE TABLE IF NOT EXISTS `?:paymos_invoices` (
+                `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+                `cscart_order_id` int(11) unsigned NOT NULL,
+                `paymos_invoice_id` varchar(128) NOT NULL,
+                `external_order_id` varchar(128) NOT NULL,
+                `environment` varchar(16) NOT NULL,
+                `project_id` varchar(128) NOT NULL,
+                `amount` varchar(64) NOT NULL,
+                `currency` varchar(16) NOT NULL,
+                `payment_url` text NOT NULL,
+                `status` varchar(64) NOT NULL,
+                `renew_count` int(11) unsigned NOT NULL DEFAULT 0,
+                `created_at` datetime NOT NULL,
+                `updated_at` datetime NOT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `paymos_invoice_id` (`paymos_invoice_id`),
+                UNIQUE KEY `external_order_id` (`external_order_id`),
+                KEY `cscart_order_id` (`cscart_order_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        </item>
+        <item for="install">
+            CREATE TABLE IF NOT EXISTS `?:paymos_events` (
+                `event_id` varchar(128) NOT NULL,
+                `expires_at` int(11) unsigned NOT NULL,
+                `created_at` int(11) unsigned NOT NULL,
+                PRIMARY KEY (`event_id`),
+                KEY `expires_at` (`expires_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+        </item>
+        <item for="install">
+            INSERT INTO `?:payment_processors`
+                (`processor`, `processor_script`, `processor_template`, `admin_template`, `callback`, `type`, `addon`)
+            VALUES
+                ('Paymos', 'paymos.php', 'views/orders/components/payments/cc_outside.tpl', 'paymos.tpl', 'N', 'P', 'paymos');
+        </item>
+        <item for="uninstall">
+            DELETE FROM `?:payment_processors` WHERE `processor_script` = 'paymos.php' AND `addon` = 'paymos';
+        </item>
+        <item for="uninstall">
+            DROP TABLE IF EXISTS `?:paymos_invoices`;
+        </item>
+        <item for="uninstall">
+            DROP TABLE IF EXISTS `?:paymos_events`;
+        </item>
+    </queries>
+</addon>

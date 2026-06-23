@@ -1,0 +1,54 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tygh\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language-Team: Russian\n"
+"Language: ru_RU\n"
+
+msgctxt "Addons::name::paymos"
+msgid "Paymos Payments"
+msgstr "Paymos Payments"
+
+msgctxt "Addons::description::paymos"
+msgid "Paymos hosted checkout payment processor."
+msgstr "Платёжный процессор Paymos с размещённым оформлением."
+
+msgctxt "Languages::paymos.mode"
+msgid "Mode"
+msgstr "Режим"
+
+msgctxt "Languages::paymos.mode_sandbox"
+msgid "Sandbox"
+msgstr "Sandbox"
+
+msgctxt "Languages::paymos.mode_live"
+msgid "Live"
+msgstr "Live"
+
+msgctxt "Languages::paymos.mode_description"
+msgid "Sandbox and live credentials are bundled in your generated package. Switch to Live when you are ready to process real orders."
+msgstr "Креды Sandbox и Live вшиты в сгенерированный пакет. Переключите на Live, когда будете готовы принимать реальные заказы."
+
+msgctxt "Languages::paymos.pending_status"
+msgid "Order status while awaiting payment (status code, e.g. O)"
+msgstr "Статус заказа в ожидании оплаты (код статуса, напр. O)"
+
+msgctxt "Languages::paymos.paid_status"
+msgid "Order status when paid (status code, e.g. P)"
+msgstr "Статус заказа при оплате (код статуса, напр. P)"
+
+msgctxt "Languages::paymos.confirming_status"
+msgid "Order status while the payment is confirming on-chain (status code)"
+msgstr "Статус заказа при подтверждении оплаты в сети (код статуса)"
+
+msgctxt "Languages::paymos.failed_status"
+msgid "Order status when the payment is underpaid (status code)"
+msgstr "Статус заказа при недоплате (код статуса)"
+
+msgctxt "Languages::paymos.cancelled_status"
+msgid "Order status when the invoice is cancelled or expired (status code)"
+msgstr "Статус заказа при отмене или истечении счёта (код статуса)"
+
+msgctxt "Languages::paymos.debug_logging"
+msgid "Debug logging"
+msgstr "Журнал отладки"
