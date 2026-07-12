@@ -99,6 +99,7 @@ function cscart_invoice_event($eventId, $eventType, $status, array $overrides = 
     return array_replace_recursive(array(
         'event_id' => $eventId,
         'event_type' => $eventType,
+        'version' => 1,
         'occurred_at' => 1709000000,
         'data' => array(
             'invoice_id' => 'inv_123',
@@ -116,11 +117,6 @@ function cscart_invoice_event($eventId, $eventType, $status, array $overrides = 
 
 function paymos_cscart_reset_test_state()
 {
-    $config = PAYMOS_CSCART_ADDON_DIR . 'paymos-config.php';
-    if (is_file($config)) {
-        unlink($config);
-    }
-
     if (class_exists('PaymosCsCart\\Config') && method_exists('PaymosCsCart\\Config', 'resetForTests')) {
         PaymosCsCart\Config::resetForTests();
     }
@@ -128,11 +124,8 @@ function paymos_cscart_reset_test_state()
 
 function paymos_cscart_write_generated_config($php)
 {
-    file_put_contents(PAYMOS_CSCART_ADDON_DIR . 'paymos-config.php', "<?php\n\nreturn " . $php . ";\n");
-
-    if (class_exists('PaymosCsCart\\Config') && method_exists('PaymosCsCart\\Config', 'resetForTests')) {
-        PaymosCsCart\Config::resetForTests();
-    }
+    $config = eval('return ' . $php . ';');
+    PaymosCsCart\Config::useConfigForTests(is_array($config) ? $config : array());
 }
 
 final class FakePaymosInvoices
