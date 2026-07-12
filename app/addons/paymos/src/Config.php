@@ -83,7 +83,7 @@ final class Config
         }
 
         if (count($secrets) === 0) {
-            throw new \InvalidArgumentException('Paymos generated config must contain at least one webhook secret.');
+            throw new \InvalidArgumentException('Paymos connected credentials must contain at least one webhook secret.');
         }
 
         return $secrets;
@@ -138,7 +138,7 @@ final class Config
 
         $value = $this->scalar($config, $key);
         if ($required && $value === '') {
-            throw new \InvalidArgumentException('Paymos generated config is missing ' . $key . ' for ' . $environment . '.');
+            throw new \InvalidArgumentException('Paymos connected credentials are missing ' . $key . ' for ' . $environment . '.');
         }
 
         return $value;
