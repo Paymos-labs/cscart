@@ -33,6 +33,12 @@ final class Config
         self::$generatedConfig = null;
     }
 
+    /** @param array<string, mixed> $config */
+    public static function useConfigForTests(array $config)
+    {
+        self::$generatedConfig = $config;
+    }
+
     public function environment()
     {
         $mode = $this->scalar($this->params, 'mode');
@@ -169,11 +175,15 @@ final class Config
             return self::$generatedConfig;
         }
 
-        $path = dirname(__DIR__) . '/paymos-config.php';
-        if (is_file($path)) {
-            $config = require $path;
-            if (is_array($config)) {
-                self::$generatedConfig = $config;
+        if (function_exists('db_get_field')) {
+            try {
+                $stored = CredentialStore::loadCredentials();
+                if (count($stored) > 0) {
+                    self::$generatedConfig = array('environments' => $stored);
+                    return self::$generatedConfig;
+                }
+            } catch (\Throwable $exception) {
+                self::$generatedConfig = array('mode' => 'sandbox', 'environments' => array());
                 return self::$generatedConfig;
             }
         }

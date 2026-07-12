@@ -10,6 +10,50 @@
 </div>
 
 <div class="control-group">
+    <label class="control-label">Connect Paymos</label>
+    <div class="controls">
+        <button type="button" class="btn btn-primary" id="paymos-connect-button">Connect Paymos</button>
+        <span id="paymos-connect-status" class="muted" aria-live="polite"></span>
+    </div>
+</div>
+
+<script>
+(function (_, $) {
+    var button = document.getElementById('paymos-connect-button');
+    var status = document.getElementById('paymos-connect-status');
+    var urls = {
+        connect_start: '{"paymos.connect_start"|fn_url|escape:"javascript"}',
+        connect_poll: '{"paymos.connect_poll"|fn_url|escape:"javascript"}'
+    };
+    if (!button) return;
+    function post(mode) {
+        return fetch(urls[mode], {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({security_hash: _.security_hash}).toString()
+        }).then(function (response) { return response.json(); });
+    }
+    button.addEventListener('click', function () {
+        button.disabled = true; status.textContent = ' Starting secure connection…';
+        post('connect_start').then(function (result) {
+            if (result.error) throw new Error(result.error);
+            window.open(result.verification_url, '_blank', 'noopener,noreferrer');
+            status.textContent = ' Waiting for approval. Code: ' + result.user_code;
+            var interval = Math.max(1, Number(result.interval || 5)) * 1000;
+            window.setTimeout(function poll() {
+                post('connect_poll').then(function (next) {
+                    if (next.error) throw new Error(next.error);
+                    if (next.status === 'connected') { window.location.reload(); return; }
+                    window.setTimeout(poll, next.status === 'slow_down' ? interval + 5000 : interval);
+                }).catch(function (error) { status.textContent = ' ' + error.message; button.disabled = false; });
+            }, interval);
+        }).catch(function (error) { status.textContent = ' ' + error.message; button.disabled = false; });
+    });
+}(Tygh, Tygh.$));
+</script>
+
+<div class="control-group">
     <label class="control-label" for="paymos_pending_status">{__("paymos.pending_status")}</label>
     <div class="controls">
         <input type="text"
