@@ -26,8 +26,8 @@ msgid "Live"
 msgstr "Live"
 
 msgctxt "Languages::paymos.mode_description"
-msgid "Sandbox and live credentials are bundled in your generated package. Switch to Live when you are ready to process real orders."
-msgstr "Креды Sandbox и Live вшиты в сгенерированный пакет. Переключите на Live, когда будете готовы принимать реальные заказы."
+msgid "Connect Paymos once, test in Sandbox, then switch to Live. Credentials are delivered securely after approval and are never included in the add-on package."
+msgstr "Подключите Paymos один раз, проверьте оплату в Sandbox и затем переключитесь на Live. Ключи передаются безопасно после подтверждения и никогда не входят в пакет аддона."
 
 msgctxt "Languages::paymos.pending_status"
 msgid "Order status while awaiting payment (status code, e.g. O)"
