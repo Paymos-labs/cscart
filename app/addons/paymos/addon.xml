@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <addon scheme="3.0" edition_type="ROOT,ULT:VENDOR">
     <id>paymos</id>
-    <version>1.0.6</version>
+    <version>1.1.0</version>
     <priority>100500</priority>
     <status>active</status>
     <auto_install>ULTIMATE,MULTIVENDOR</auto_install>
