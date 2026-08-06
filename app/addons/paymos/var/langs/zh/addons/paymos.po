@@ -1,0 +1,55 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tygh\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgctxt "Addons::name::paymos"
+msgid "Paymos Payments"
+msgstr "Paymos Payments"
+
+msgctxt "Addons::description::paymos"
+msgid "Paymos hosted checkout payment processor."
+msgstr "由 Paymos 托管收银台的支付处理器。"
+
+msgctxt "Languages::paymos.mode"
+msgid "Mode"
+msgstr "模式"
+
+msgctxt "Languages::paymos.mode_sandbox"
+msgid "Sandbox"
+msgstr "沙盒"
+
+msgctxt "Languages::paymos.mode_live"
+msgid "Live"
+msgstr "正式"
+
+msgctxt "Languages::paymos.mode_description"
+msgid "Connect Paymos once, test in Sandbox, then switch to Live. Credentials are delivered securely after approval and are never included in the add-on package."
+msgstr "连接 Paymos 一次，先在沙盒中测试，再切换到正式模式。密钥在审核通过后安全下发，绝不包含在插件安装包中。"
+
+msgctxt "Languages::paymos.pending_status"
+msgid "Order status while awaiting payment (status code, e.g. O)"
+msgstr "等待付款时的订单状态（状态代码，例如 O）"
+
+msgctxt "Languages::paymos.paid_status"
+msgid "Order status when paid (status code, e.g. P)"
+msgstr "付款完成时的订单状态（状态代码，例如 P）"
+
+msgctxt "Languages::paymos.confirming_status"
+msgid "Order status while the payment is confirming on-chain (status code)"
+msgstr "链上确认中时的订单状态（状态代码）"
+
+msgctxt "Languages::paymos.failed_status"
+msgid "Order status when the payment is underpaid (status code)"
+msgstr "付款不足时的订单状态（状态代码）"
+
+msgctxt "Languages::paymos.cancelled_status"
+msgid "Order status when the invoice is cancelled or expired (status code)"
+msgstr "账单取消或过期时的订单状态（状态代码）"
+
+msgctxt "Languages::paymos.debug_logging"
+msgid "Debug logging"
+msgstr "调试日志"

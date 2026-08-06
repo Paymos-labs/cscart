@@ -1,0 +1,54 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: tygh\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language-Team: Turkish\n"
+"Language: tr\n"
+
+msgctxt "Addons::name::paymos"
+msgid "Paymos Payments"
+msgstr "Paymos Payments"
+
+msgctxt "Addons::description::paymos"
+msgid "Paymos hosted checkout payment processor."
+msgstr "Paymos barındırmalı ödeme sayfası sunan ödeme altyapısı."
+
+msgctxt "Languages::paymos.mode"
+msgid "Mode"
+msgstr "Mod"
+
+msgctxt "Languages::paymos.mode_sandbox"
+msgid "Sandbox"
+msgstr "Sandbox"
+
+msgctxt "Languages::paymos.mode_live"
+msgid "Live"
+msgstr "Live"
+
+msgctxt "Languages::paymos.mode_description"
+msgid "Connect Paymos once, test in Sandbox, then switch to Live. Credentials are delivered securely after approval and are never included in the add-on package."
+msgstr "Paymos'u bir kez bağlayın, Sandbox'ta test edin, ardından Live'a geçin. Erişim bilgileri onaydan sonra güvenli şekilde iletilir ve eklenti paketine asla dahil edilmez."
+
+msgctxt "Languages::paymos.pending_status"
+msgid "Order status while awaiting payment (status code, e.g. O)"
+msgstr "Ödeme beklenirken sipariş durumu (durum kodu, örn. O)"
+
+msgctxt "Languages::paymos.paid_status"
+msgid "Order status when paid (status code, e.g. P)"
+msgstr "Ödeme alındığında sipariş durumu (durum kodu, örn. P)"
+
+msgctxt "Languages::paymos.confirming_status"
+msgid "Order status while the payment is confirming on-chain (status code)"
+msgstr "Ödeme on-chain onaylanırken sipariş durumu (durum kodu)"
+
+msgctxt "Languages::paymos.failed_status"
+msgid "Order status when the payment is underpaid (status code)"
+msgstr "Ödeme eksik yapıldığında sipariş durumu (durum kodu)"
+
+msgctxt "Languages::paymos.cancelled_status"
+msgid "Order status when the invoice is cancelled or expired (status code)"
+msgstr "Fatura iptal edildiğinde veya süresi dolduğunda sipariş durumu (durum kodu)"
+
+msgctxt "Languages::paymos.debug_logging"
+msgid "Debug logging"
+msgstr "Hata ayıklama günlüğü"
