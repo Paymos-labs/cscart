@@ -18,12 +18,17 @@
 </div>
 
 <script>
+{* Smarty owns { and } — an object literal whose brace is followed by a name and a
+   colon ({security_hash: …}, {'Content-Type': …}) is parsed as a tag and aborts the
+   whole page with a compiler error, so the script lives inside {literal} and only
+   the two URL expressions punch back out. *}
+{literal}
 (function (_, $) {
     var button = document.getElementById('paymos-connect-button');
     var status = document.getElementById('paymos-connect-status');
     var urls = {
-        connect_start: '{"paymos.connect_start"|fn_url|escape:"javascript"}',
-        connect_poll: '{"paymos.connect_poll"|fn_url|escape:"javascript"}'
+        connect_start: '{/literal}{"paymos.connect_start"|fn_url|escape:"javascript"}{literal}',
+        connect_poll: '{/literal}{"paymos.connect_poll"|fn_url|escape:"javascript"}{literal}'
     };
     if (!button) return;
     function post(mode, extra) {
@@ -87,6 +92,7 @@
         });
     });
 }(Tygh, Tygh.$));
+{/literal}
 </script>
 
 <div class="control-group">
