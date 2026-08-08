@@ -8,7 +8,15 @@ require_once __DIR__ . '/../src/Autoloader.php';
 \PaymosCsCart\Autoloader::register();
 
 if (defined('PAYMENT_NOTIFICATION')) {
-    $callbackMode = isset($mode) ? (string) $mode : (isset($_REQUEST['mode']) ? (string) $_REQUEST['mode'] : '');
+    // The explicit `mode` from the URL wins over CS-Cart's own $mode. The webhook
+    // address this add-on registers with Paymos is
+    // `dispatch=payment_notification.notify&payment=paymos&mode=webhook`, and CS-Cart
+    // sets $mode from the dispatch — to `notify`. Reading $mode first therefore
+    // rejected EVERY delivery with "Invalid callback mode" (400), so Paymos retried
+    // forever and no order ever completed.
+    $callbackMode = isset($_REQUEST['mode']) && (string) $_REQUEST['mode'] !== ''
+        ? (string) $_REQUEST['mode']
+        : (isset($mode) ? (string) $mode : '');
     $rawBody = file_get_contents('php://input');
     $signature = isset($_SERVER['HTTP_X_WEBHOOK_SIGNATURE']) ? (string) $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] : '';
 

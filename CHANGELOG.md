@@ -6,6 +6,10 @@ this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 The public release history also lives at [paymos.io/changelog](https://paymos.io/changelog).
 
+## [1.3.5] - 2026-08-08
+
+- fix(cscart): make payment possible at all — currency and callback mode
+
 ## [1.3.4] - 2026-08-08
 
 - fix(cscart): the connect fix never reached this plugin

@@ -33,7 +33,15 @@ final class CheckoutProcessor
         // the invoice currency MUST be the order's primary currency — never
         // `secondary_currency` (display only), which would mis-label the amount.
         $amount = $this->formatAmount($this->field($orderInfo, 'total'));
+        // …and CS-Cart never puts that currency on the order: there is no such column
+        // in cscart_orders and fn_get_order_info() returns no `currency` key — only
+        // `secondary_currency`, which is the display currency. The primary currency
+        // lives in CART_PRIMARY_CURRENCY. Reading the absent field threw on EVERY
+        // order, so no invoice could ever be created.
         $currency = strtoupper($this->field($orderInfo, 'currency'));
+        if ($currency === '' && defined('CART_PRIMARY_CURRENCY')) {
+            $currency = strtoupper((string) CART_PRIMARY_CURRENCY);
+        }
         if ($currency === '') {
             throw new \RuntimeException('CS-Cart order currency is missing.');
         }
