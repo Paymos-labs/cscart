@@ -26,20 +26,53 @@
         connect_poll: '{"paymos.connect_poll"|fn_url|escape:"javascript"}'
     };
     if (!button) return;
-    function post(mode) {
+    function post(mode, extra) {
+        var body = {security_hash: _.security_hash};
+        if (extra) { Object.keys(extra).forEach(function (k) { body[k] = extra[k]; }); }
         return fetch(urls[mode], {
             method: 'POST',
             credentials: 'same-origin',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({security_hash: _.security_hash}).toString()
+            body: new URLSearchParams(body).toString()
         }).then(function (response) { return response.json(); });
     }
+
+    // Renders the recovery path as real markup so the merchant can still reach the
+    // approval page after the browser blocked the tab.
+    function manualApproval(url, userCode) {
+        status.textContent = '';
+        var reason = document.createTextNode('Your browser blocked the approval tab. ');
+        var link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = 'Open the approval page';
+        var code = document.createTextNode(' Code: ' + userCode);
+        status.appendChild(reason);
+        status.appendChild(link);
+        status.appendChild(code);
+    }
+
     button.addEventListener('click', function () {
         button.disabled = true; status.textContent = ' Starting secure connection…';
-        post('connect_start').then(function (result) {
+
+        // Opened synchronously: browsers only honour window.open for a few seconds
+        // after the click, so opening it once the start request resolves is blocked
+        // on slow connections. No feature string — any feature string asks for a
+        // popup window, which blockers reject far more often than a plain tab.
+        var tab = window.open('', '_blank');
+        if (tab) {
+            try { tab.opener = null; } catch (error) { /* cross-origin hardening only */ }
+        }
+
+        post('connect_start', {paymos_return_url: window.location.href}).then(function (result) {
             if (result.error) throw new Error(result.error);
-            window.open(result.verification_url, '_blank', 'noopener,noreferrer');
-            status.textContent = ' Waiting for approval. Code: ' + result.user_code;
+            if (tab && !tab.closed) {
+                tab.location = result.verification_url;
+                status.textContent = ' Waiting for approval. Code: ' + result.user_code;
+            } else {
+                manualApproval(result.verification_url, result.user_code);
+            }
             var interval = Math.max(1, Number(result.interval || 5)) * 1000;
             window.setTimeout(function poll() {
                 post('connect_poll').then(function (next) {
@@ -48,7 +81,10 @@
                     window.setTimeout(poll, next.status === 'slow_down' ? interval + 5000 : interval);
                 }).catch(function (error) { status.textContent = ' ' + error.message; button.disabled = false; });
             }, interval);
-        }).catch(function (error) { status.textContent = ' ' + error.message; button.disabled = false; });
+        }).catch(function (error) {
+            if (tab && !tab.closed) { tab.close(); }
+            status.textContent = ' ' + error.message; button.disabled = false;
+        });
     });
 }(Tygh, Tygh.$));
 </script>

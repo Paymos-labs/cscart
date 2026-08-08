@@ -19,7 +19,10 @@ try {
     }
     $client = new \Paymos\Connect\DeviceConnectClient('https://app.paymos.io');
     if ($mode === 'connect_start') {
-        $state = $client->start('cscart', $sourceUrl);
+        // The admin page posts its own URL so approval can return the merchant to it.
+        // Paymos drops it unless it shares an origin with the storefront URL above.
+        $returnUrl = isset($_POST['paymos_return_url']) ? (string) $_POST['paymos_return_url'] : '';
+        $state = $client->start('cscart', $sourceUrl, $returnUrl);
         \PaymosCsCart\CredentialStore::saveState($state);
         echo json_encode(array(
             'verification_url' => $state['verification_url'],
