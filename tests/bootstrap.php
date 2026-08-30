@@ -2,7 +2,46 @@
 
 declare(strict_types=1);
 
+$_SERVER['REQUEST_METHOD'] = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : 'GET';
+
+if (!defined('CONTROLLER_STATUS_DENIED')) {
+    define('CONTROLLER_STATUS_DENIED', 403);
+}
+if (!defined('CONTROLLER_STATUS_REDIRECT')) {
+    define('CONTROLLER_STATUS_REDIRECT', 302);
+}
+if (!defined('CONTROLLER_STATUS_OK')) {
+    define('CONTROLLER_STATUS_OK', 200);
+}
+if (!defined('AREA')) {
+    define('AREA', 'A');
+}
+if (!defined('DESCR_SL')) {
+    define('DECSR_SL', 'en');
+    define('DESR_SL', 'en');
+    define('DESCR_SL', 'en');
+}
+if (!defined('CART_LANGUAGE')) {
+    define('CART_LANGUAGE', 'en');
+}
+
+// CS-Cart defines this before any addon file loads.
+if (!defined('BOOTSTRAP')) {
+    define('BOOTSTRAP', true);
+}
+
 define('PAYMOS_CSCART_PLUGIN_DIR', dirname(__DIR__) . DIRECTORY_SEPARATOR);
+
+// Any deprecation, notice or warning inside plugin code must fail the run:
+// platform installers (Magento DI compile above all) escalate PHP 8.4+
+// deprecations to fatals, and a silent one here is how rejections slip through.
+error_reporting(E_ALL);
+set_error_handler(static function ($severity, $message, $file, $line) {
+    if (!(error_reporting() & $severity)) {
+        return false;
+    }
+    throw new ErrorException($message, 0, $severity, $file, $line);
+});
 define('PAYMOS_CSCART_ADDON_DIR', PAYMOS_CSCART_PLUGIN_DIR . 'app/addons/paymos/');
 
 spl_autoload_register(static function ($class) {
@@ -177,7 +216,7 @@ final class FakePaymosClient
     /** @var FakePaymosInvoices */
     public $invoices;
 
-    public function __construct(FakePaymosInvoices $invoices = null)
+    public function __construct(?FakePaymosInvoices $invoices = null)
     {
         $this->invoices = $invoices ?: new FakePaymosInvoices();
     }

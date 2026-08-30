@@ -15,6 +15,12 @@ final class Migrations
             return;
         }
 
+        // utf8mb4 for new installs; existing utf8 (utf8mb3) tables are converted
+        // idempotently so joins against ?:orders stop crossing charset lines on
+        // MySQL 8, where utf8mb3 is deprecated (and gone in MySQL 9).
+        self::ensureCharset(self::INVOICES_TABLE);
+        self::ensureCharset(self::EVENTS_TABLE);
+
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_invoices (
             id int(11) unsigned NOT NULL AUTO_INCREMENT,
             cscart_order_id int(11) unsigned NOT NULL,
@@ -33,7 +39,7 @@ final class Migrations
             UNIQUE KEY paymos_invoice_id (paymos_invoice_id),
             UNIQUE KEY external_order_id (external_order_id),
             KEY cscart_order_id (cscart_order_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_events (
             event_id varchar(128) NOT NULL,
@@ -41,6 +47,28 @@ final class Migrations
             created_at int(11) unsigned NOT NULL,
             PRIMARY KEY (event_id),
             KEY expires_at (expires_at)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8");
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    }
+
+    /**
+     * Convert an existing table to utf8mb4 only when it is not utf8mb4 already:
+     * checked through information_schema so the ALTER never runs twice.
+     *
+     * @param string $table
+     * @return void
+     */
+    private static function ensureCharset($table)
+    {
+        $row = db_get_row(
+            "SELECT CHARACTER_SET_NAME as cs"
+            . " FROM information_schema.TABLES t"
+            . " JOIN information_schema.COLLATIONS c ON (c.COLLATION_NAME = t.TABLE_COLLATION)"
+            . " WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = '?:{$table}'"
+        );
+        if (is_array($row) && strtoupper((string) $row['cs']) === 'UTF8MB4') {
+            return;
+        }
+
+        db_query("ALTER TABLE ?:{$table} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     }
 }
