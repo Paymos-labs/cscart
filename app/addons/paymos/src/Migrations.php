@@ -15,12 +15,13 @@ final class Migrations
             return;
         }
 
-        // utf8mb4 for new installs; existing utf8 (utf8mb3) tables are converted
-        // idempotently so joins against ?:orders stop crossing charset lines on
-        // MySQL 8, where utf8mb3 is deprecated (and gone in MySQL 9).
-        self::ensureCharset(self::INVOICES_TABLE);
-        self::ensureCharset(self::EVENTS_TABLE);
-
+        // utf8mb4 for new installs; an existing utf8 (utf8mb3) table is converted
+        // right after its CREATE so joins against ?:orders stop crossing charset
+        // lines on MySQL 8, where utf8mb3 is deprecated (and gone in MySQL 9).
+        //
+        // The conversion MUST follow the CREATE of the same table: on a fresh
+        // database an ALTER that ran first would hit a table that does not exist
+        // yet. Keeping each pair together is what makes that unorderable.
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_invoices (
             id int(11) unsigned NOT NULL AUTO_INCREMENT,
             cscart_order_id int(11) unsigned NOT NULL,
@@ -40,6 +41,7 @@ final class Migrations
             UNIQUE KEY external_order_id (external_order_id),
             KEY cscart_order_id (cscart_order_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        self::ensureCharset(self::INVOICES_TABLE);
 
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_events (
             event_id varchar(128) NOT NULL,
@@ -48,24 +50,31 @@ final class Migrations
             PRIMARY KEY (event_id),
             KEY expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        self::ensureCharset(self::EVENTS_TABLE);
     }
 
     /**
-     * Convert an existing table to utf8mb4 only when it is not utf8mb4 already:
-     * checked through information_schema so the ALTER never runs twice.
+     * Convert one existing table to utf8mb4, and only when it is not utf8mb4
+     * already: the charset is read from information_schema so the ALTER never
+     * runs twice, and an absent row (no such table) is a no-op rather than an
+     * ALTER against nothing.
      *
      * @param string $table
      * @return void
      */
     private static function ensureCharset($table)
     {
+        if (!function_exists('db_get_row')) {
+            return;
+        }
+
         $row = db_get_row(
-            "SELECT CHARACTER_SET_NAME as cs"
+            "SELECT c.CHARACTER_SET_NAME as cs"
             . " FROM information_schema.TABLES t"
             . " JOIN information_schema.COLLATIONS c ON (c.COLLATION_NAME = t.TABLE_COLLATION)"
             . " WHERE t.TABLE_SCHEMA = DATABASE() AND t.TABLE_NAME = '?:{$table}'"
         );
-        if (is_array($row) && strtoupper((string) $row['cs']) === 'UTF8MB4') {
+        if (!is_array($row) || !isset($row['cs']) || strtoupper((string) $row['cs']) === 'UTF8MB4') {
             return;
         }
 
