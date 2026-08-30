@@ -33,7 +33,7 @@ final class WebhookProcessor
         CsCartAdapterInterface $cscart,
         InvoiceStoreInterface $invoiceStore,
         EventStoreInterface $eventStore,
-        callable $clientFactory = null
+        ?callable $clientFactory = null
     ) {
         $this->cscart = $cscart;
         $this->invoiceStore = $invoiceStore;
