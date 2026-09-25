@@ -7,6 +7,8 @@ namespace PaymosCsCart;
 use Paymos\Client;
 use Paymos\Plugin\AmountGuard;
 use Paymos\Plugin\InvoiceRenewal;
+use Paymos\Plugin\InvoiceReplacement;
+use Paymos\Plugin\InvoiceReplacementBlockedException;
 
 final class CheckoutProcessor
 {
@@ -56,6 +58,7 @@ final class CheckoutProcessor
         // suffix is bumped once and a fresh invoice is cut. The row keeps no
         // deadline: confirming a network moves expires_at on the server with no
         // webhook, so only the server's answer to the create call decides.
+        // Every replacement first closes the old invoice (closeBeforeReplacing).
         $existing = $this->store->findByCsCartOrderId($orderId);
         $reused = is_array($existing)
             && $this->snapshotMatches($existing, $amount, $currency, $config)
@@ -64,6 +67,9 @@ final class CheckoutProcessor
         if ($reused) {
             $renewCount = isset($existing['renew_count']) ? (int) $existing['renew_count'] : 0;
         } else {
+            if (is_array($existing)) {
+                $this->closeBeforeReplacing($existing, $config);
+            }
             $renewCount = is_array($existing) && isset($existing['renew_count']) ? ((int) $existing['renew_count'] + 1) : 0;
         }
 
@@ -72,6 +78,13 @@ final class CheckoutProcessor
         $response = $this->client($config)->invoices()->create($payload);
 
         if ($reused && InvoiceRenewal::isRequired($response)) {
+            // The server's own answer for the old id: closed as it says, or
+            // cancelled first if it is merely past its deadline.
+            $this->closeBeforeReplacing(array(
+                'paymos_invoice_id' => $this->responseField($response, array('invoice_id')),
+                'environment' => $config->environment(),
+                'status' => $this->responseField($response, array('status')),
+            ), $config);
             $reused = false;
             $renewCount++;
             $externalOrderId = 'cscart_' . (int) $orderId . '_' . $renewCount;
@@ -139,13 +152,48 @@ final class CheckoutProcessor
             && trim((string) $row['payment_url']) !== '';
     }
 
-    private function client(Config $config)
+    /**
+     * The order's invoice is about to be replaced (the order changed, or the
+     * invoice can no longer be paid). Cancel it on the server first, or the
+     * buyer could pay both (BUG-166): the SDK cancels it, or confirms from the
+     * server that it ended unpaid. Anything else — paid, still payable, 404,
+     * no answer — keeps the old invoice and stops the checkout; the payment
+     * script records the summary on the order for manual review.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function closeBeforeReplacing(array $row, Config $config)
     {
-        if ($this->clientFactory !== null) {
-            return call_user_func($this->clientFactory, $config);
+        $environment = (string) $row['environment'];
+        $recorded = isset($row['status']) ? (string) $row['status'] : '';
+        $result = (new InvoiceReplacement(function () use ($config, $environment) {
+            return $this->client($config, $environment);
+        }))->close((string) $row['paymos_invoice_id'], $recorded);
+
+        if (!$result->isClosed()) {
+            throw new InvoiceReplacementBlockedException($result);
         }
 
-        return new Client($config->clientConfig());
+        // Record the final status before the new row exists, so the old
+        // invoice's own webhook (invoice.cancelled after our cancel) finds a
+        // final row and is ignored as stale.
+        if ($result->status() !== '' && $result->status() !== $recorded) {
+            $this->store->updateStatus((string) $row['paymos_invoice_id'], $result->status());
+        }
+    }
+
+    /**
+     * @param string|null $environment The environment the invoice lives in; the selected mode by default.
+     */
+    private function client(Config $config, $environment = null)
+    {
+        if ($this->clientFactory !== null) {
+            return call_user_func($this->clientFactory, $config, $environment);
+        }
+
+        return new Client($environment === null
+            ? $config->clientConfig()
+            : $config->clientConfigForEnvironment($environment));
     }
 
     /**

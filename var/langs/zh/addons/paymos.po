@@ -53,3 +53,15 @@ msgstr "账单取消或过期时的订单状态（状态代码）"
 msgctxt "Languages::paymos.debug_logging"
 msgid "Debug logging"
 msgstr "调试日志"
+
+msgctxt "Languages::paymos.checkout_failed"
+msgid "Paymos payment error: unable to create invoice."
+msgstr "Paymos 付款错误：无法创建账单。"
+
+msgctxt "Languages::paymos.manual_review"
+msgid "Paymos payment needs manual review."
+msgstr "Paymos payment needs manual review."
+
+msgctxt "Languages::paymos.replacement_blocked"
+msgid "The store needs to review this order before payment can continue. Please contact the store."
+msgstr "商家需要先审核这笔订单，之后才能继续付款。请联系商家。"

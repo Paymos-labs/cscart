@@ -86,9 +86,27 @@ try {
     }
 
     fn_redirect($result['payment_url'], true);
-} catch (\Throwable $e) {
+} catch (\Paymos\Plugin\InvoiceReplacementBlockedException $e) {
+    // The order's previous Paymos invoice may still be paid (BUG-166): no second
+    // invoice was cut. Put the reason on the order for the merchant to review;
+    // the buyer is asked to contact the store, not to pay again (BUG-181).
+    (new \PaymosCsCart\CsCartAdapter())->log('Paymos CS-Cart invoice was not replaced.', array('order_id' => (int) $order_id, 'manual_review' => $e->result()->summary()));
+    if (function_exists('fn_update_order_payment_info')) {
+        fn_update_order_payment_info((int) $order_id, array(
+            'reason_text' => \PaymosCsCart\CheckoutNotice::manualReviewReason($e),
+        ));
+    }
     if (function_exists('fn_set_notification')) {
-        fn_set_notification('E', __('error'), 'Paymos payment error: ' . $e->getMessage());
+        fn_set_notification('E', __('error'), \PaymosCsCart\CheckoutNotice::text($e));
+    }
+    if (function_exists('fn_redirect')) {
+        fn_redirect('checkout.checkout');
+    }
+} catch (\Throwable $e) {
+    // The buyer reads a generic line; the cause is for the merchant (BUG-188).
+    (new \PaymosCsCart\CsCartAdapter())->log('Paymos CS-Cart checkout failed.', array('order_id' => (int) $order_id, 'error' => $e->getMessage()));
+    if (function_exists('fn_set_notification')) {
+        fn_set_notification('E', __('error'), \PaymosCsCart\CheckoutNotice::text($e));
     }
     if (function_exists('fn_redirect')) {
         fn_redirect('checkout.checkout');

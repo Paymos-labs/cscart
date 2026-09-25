@@ -50,6 +50,7 @@ unset($_srcRoot, $_iter, $_files, $_file, $_rel, $_f, $_predefined);
 $testFiles = array(
     __DIR__ . '/ConfigTest.php',
     __DIR__ . '/CheckoutProcessorTest.php',
+    __DIR__ . '/CheckoutNoticeTest.php',
     __DIR__ . '/WebhookProcessorTest.php',
 );
 
