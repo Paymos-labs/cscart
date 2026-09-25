@@ -52,3 +52,15 @@ msgstr "Статус заказа при отмене или истечении 
 msgctxt "Languages::paymos.debug_logging"
 msgid "Debug logging"
 msgstr "Журнал отладки"
+
+msgctxt "Languages::paymos.checkout_failed"
+msgid "Paymos payment error: unable to create invoice."
+msgstr "Ошибка оплаты Paymos: не удалось создать счёт."
+
+msgctxt "Languages::paymos.manual_review"
+msgid "Paymos payment needs manual review."
+msgstr "Оплату Paymos нужно проверить вручную."
+
+msgctxt "Languages::paymos.replacement_blocked"
+msgid "The store needs to review this order before payment can continue. Please contact the store."
+msgstr "Магазину нужно проверить этот заказ, прежде чем вы сможете продолжить оплату. Обратитесь в магазин."

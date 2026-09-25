@@ -52,3 +52,15 @@ msgstr "Fatura iptal edildiğinde veya süresi dolduğunda sipariş durumu (duru
 msgctxt "Languages::paymos.debug_logging"
 msgid "Debug logging"
 msgstr "Hata ayıklama günlüğü"
+
+msgctxt "Languages::paymos.checkout_failed"
+msgid "Paymos payment error: unable to create invoice."
+msgstr "Paymos ödeme hatası: fatura oluşturulamadı."
+
+msgctxt "Languages::paymos.manual_review"
+msgid "Paymos payment needs manual review."
+msgstr "Paymos payment needs manual review."
+
+msgctxt "Languages::paymos.replacement_blocked"
+msgid "The store needs to review this order before payment can continue. Please contact the store."
+msgstr "Bu siparişi önce mağaza incelemeli, ödemeye ancak sonra devam edebilirsiniz. Lütfen mağazayla iletişime geçin."
