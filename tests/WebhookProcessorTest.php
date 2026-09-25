@@ -303,3 +303,117 @@ function cscart_reverse_verification_client()
         }
     );
 }
+
+function test_cscart_webhook_ignores_a_stale_event_after_a_failed_invoice()
+{
+    // BUG-135: the invoice already ended underpaid and the order is Failed
+    // ('F'). A delayed underpaid_waiting must not finish the payment again.
+    paymos_cscart_reset_test_state();
+    paymos_cscart_write_generated_config("array(
+        'config_version' => 2,
+        'environments' => array(
+            'sandbox' => array(
+                'base_url' => 'https://api.paymos.test',
+                'api_key' => 'pk_test_123',
+                'api_secret' => 'sk_test_123',
+                'project_id' => 'prj_123',
+                'webhook_secret' => 'whsec_sandbox',
+            ),
+        ),
+    )");
+
+    $store = new InMemoryInvoiceStore();
+    $store->save(array(
+        'cscart_order_id' => 42,
+        'paymos_invoice_id' => 'inv_123',
+        'external_order_id' => 'cscart_42_0',
+        'environment' => 'sandbox',
+        'project_id' => 'prj_123',
+        'amount' => '100.00',
+        'currency' => 'USD',
+        'payment_url' => 'https://paymos.test/pay/inv_123',
+        'status' => 'underpaid',
+        'renew_count' => 0,
+    ));
+    $adapter = new FakeCsCartAdapter();
+    $adapter->orders[42]['status'] = 'F';
+
+    $body = json_encode(cscart_invoice_event('evt_stale', 'invoice.underpaid_waiting', 'underpaid_waiting'));
+    $result = (new WebhookProcessor($adapter, $store, new InMemoryEventStore()))
+        ->handle($body, cscart_signed_header('whsec_sandbox', $body, 1709000000), cscart_processor_params(), 1709000000);
+
+    assertSameValue(200, $result->statusCode(), 'a stale event is acknowledged, not retried.');
+    assertSameValue(0, count($adapter->finished), 'a stale event after a final status must not move the order.');
+    assertSameValue('underpaid', $store->findByExternalOrderId('cscart_42_0')['status'], 'the final status must stay recorded.');
+}
+
+final class CommitAwareTestEventStore implements Paymos\Webhook\CommitAwareEventStoreInterface
+{
+    /** @var array<string, bool> event id => committed */
+    public $events = array();
+
+    /** @var string */
+    private $pending = '';
+
+    public function remember($eventId, $ttlSeconds)
+    {
+        if (array_key_exists((string) $eventId, $this->events)) {
+            return false;
+        }
+        $this->events[(string) $eventId] = false;
+        $this->pending = (string) $eventId;
+        return true;
+    }
+
+    public function isCommitted($eventId)
+    {
+        return !empty($this->events[(string) $eventId]);
+    }
+
+    public function commit()
+    {
+        if ($this->pending !== '') {
+            $this->events[$this->pending] = true;
+            $this->pending = '';
+        }
+    }
+
+    public function release()
+    {
+        if ($this->pending !== '') {
+            unset($this->events[$this->pending]);
+            $this->pending = '';
+        }
+    }
+}
+
+function test_cscart_webhook_answers_409_while_the_event_is_still_being_processed()
+{
+    // BUG-103: another delivery of this event holds the lock and has not
+    // finished. A 200 "duplicate" would mark it delivered — lost if that
+    // delivery then fails. Answer 409 and leave the lock alone.
+    paymos_cscart_reset_test_state();
+    paymos_cscart_write_generated_config("array(
+        'config_version' => 2,
+        'environments' => array(
+            'sandbox' => array(
+                'base_url' => 'https://api.paymos.test',
+                'api_key' => 'pk_test_123',
+                'api_secret' => 'sk_test_123',
+                'project_id' => 'prj_123',
+                'webhook_secret' => 'whsec_sandbox',
+            ),
+        ),
+    )");
+    $events = new CommitAwareTestEventStore();
+    $events->events['evt_inflight'] = false;
+    $adapter = new FakeCsCartAdapter();
+
+    $body = json_encode(cscart_invoice_event('evt_inflight', 'invoice.paid', 'paid'));
+    $result = (new WebhookProcessor($adapter, new InMemoryInvoiceStore(), $events))
+        ->handle($body, cscart_signed_header('whsec_sandbox', $body, 1709000000), cscart_processor_params(), 1709000000);
+
+    assertSameValue(409, $result->statusCode(), 'an event still in flight must be answered non-2xx so the server retries.');
+    assertSameValue(true, array_key_exists('evt_inflight', $events->events), 'the retry must not release the lock the first delivery still holds.');
+    assertSameValue(0, count($adapter->finished), 'nothing may be applied while the event is in flight.');
+}

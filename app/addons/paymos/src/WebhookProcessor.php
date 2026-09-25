@@ -6,6 +6,7 @@ namespace PaymosCsCart;
 
 use Paymos\Client;
 use Paymos\Exception\DuplicateEventException;
+use Paymos\Exception\EventInProgressException;
 use Paymos\Exception\SignatureMismatchException;
 use Paymos\Exception\TimestampSkewException;
 use Paymos\Plugin\AmountGuard;
@@ -78,6 +79,12 @@ final class WebhookProcessor
         } catch (DuplicateEventException $e) {
             $this->debugLog($processorParams, 'Paymos duplicate webhook ignored.', array('duplicate' => true));
             return new CallbackResult(200, 'OK', true);
+        } catch (EventInProgressException $e) {
+            // Another delivery of this event holds the lock and has not finished.
+            // Not a duplicate: a 2xx would mark it delivered even if that delivery
+            // then fails. 409 makes the server retry; the lock is not ours to drop.
+            $this->debugLog($processorParams, 'Paymos webhook is still being processed by another delivery.', array('in_progress' => true));
+            return new CallbackResult(409, 'In progress');
         } catch (SignatureMismatchException $e) {
             return new CallbackResult(401, 'Bad signature');
         } catch (TimestampSkewException $e) {
@@ -157,6 +164,18 @@ final class WebhookProcessor
         if ($this->wouldRollBackPaidOrder($config, $order, $action)) {
             if ($config->debugLogging()) {
                 $this->cscart->log('Paymos ignored a stale invoice status after payment completed. Invoice: ' . $event->invoiceId());
+            }
+            return false;
+        }
+
+        // Nothing leaves a final status on the server (Invoice.IsTerminal), so an
+        // event that arrives after one is an out-of-order redelivery. The paid
+        // guard above only protects paid orders; a Failed or Canceled one was
+        // moved again by a stale underpaid_waiting or confirming. The recorded
+        // invoice status is what decides, and it stays final.
+        if (StatusMapper::isFinalStatus(isset($row['status']) ? (string) $row['status'] : '')) {
+            if ($config->debugLogging()) {
+                $this->cscart->log('Paymos ignored an invoice status that arrived after a final one. Invoice: ' . $event->invoiceId());
             }
             return false;
         }
