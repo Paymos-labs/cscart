@@ -6,6 +6,7 @@ namespace PaymosCsCart;
 
 use Paymos\Client;
 use Paymos\Plugin\AmountGuard;
+use Paymos\Plugin\InvoiceRenewal;
 
 final class CheckoutProcessor
 {
@@ -47,12 +48,18 @@ final class CheckoutProcessor
         }
 
         // Always call the server — never short-circuit to a locally cached
-        // payment_url, which may point at an expired or cancelled invoice and
-        // dead-end the buyer. The server is idempotent on external_order_id:
-        // reusing the same id while the amount snapshot matches returns the live
-        // invoice; a changed amount bumps the suffix so a fresh invoice is minted.
+        // payment_url. The server is idempotent on external_order_id, but it
+        // answers a repeated id with the SAME invoice whatever became of it: an
+        // expired or cancelled one included. So the id is reused only while the
+        // snapshot matches and the invoice has not ended unpaid; if the server's
+        // answer shows it did (or nobody started it before its deadline), the
+        // suffix is bumped once and a fresh invoice is cut. The row keeps no
+        // deadline: confirming a network moves expires_at on the server with no
+        // webhook, so only the server's answer to the create call decides.
         $existing = $this->store->findByCsCartOrderId($orderId);
-        $reused = is_array($existing) && $this->snapshotMatches($existing, $amount, $currency, $config);
+        $reused = is_array($existing)
+            && $this->snapshotMatches($existing, $amount, $currency, $config)
+            && !InvoiceRenewal::isRequired($existing);
 
         if ($reused) {
             $renewCount = isset($existing['renew_count']) ? (int) $existing['renew_count'] : 0;
@@ -63,6 +70,14 @@ final class CheckoutProcessor
         $externalOrderId = 'cscart_' . (int) $orderId . '_' . $renewCount;
         $payload = $this->createPayload($orderInfo, $config, $amount, $currency, $externalOrderId);
         $response = $this->client($config)->invoices()->create($payload);
+
+        if ($reused && InvoiceRenewal::isRequired($response)) {
+            $reused = false;
+            $renewCount++;
+            $externalOrderId = 'cscart_' . (int) $orderId . '_' . $renewCount;
+            $payload = $this->createPayload($orderInfo, $config, $amount, $currency, $externalOrderId);
+            $response = $this->client($config)->invoices()->create($payload);
+        }
 
         $paymosInvoiceId = $this->responseField($response, array('invoice_id'));
         $paymentUrl = $this->responseField($response, array('payment_url'));

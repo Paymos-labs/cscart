@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace PaymosCsCart;
 
-use Paymos\Webhook\EventStoreInterface;
+use Paymos\Webhook\CommitAwareEventStoreInterface;
 
-final class EventStore implements EventStoreInterface
+final class EventStore implements CommitAwareEventStoreInterface
 {
     /** @var string */
     private $pendingEventId = '';
@@ -59,6 +59,29 @@ final class EventStore implements EventStoreInterface
         $this->pendingTtlSeconds = $ttlSeconds;
 
         return true;
+    }
+
+    /**
+     * Whether the event was processed and committed — as opposed to merely
+     * locked by a delivery that has not finished (BUG-103: that one must be
+     * answered non-2xx, or a retry arriving mid-processing marks it delivered).
+     * A committed row lives past its reservation; a lock does not.
+     */
+    public function isCommitted($eventId)
+    {
+        if (!function_exists('db_get_row')) {
+            return false;
+        }
+
+        $row = db_get_row('SELECT expires_at, created_at FROM ?:paymos_events WHERE event_id = ?s', (string) $eventId);
+        if (!is_array($row) || count($row) === 0) {
+            return false;
+        }
+
+        $expiresAt = isset($row['expires_at']) ? (int) $row['expires_at'] : 0;
+        $createdAt = isset($row['created_at']) ? (int) $row['created_at'] : 0;
+
+        return $expiresAt > time() && $expiresAt > $createdAt + self::RESERVATION_SECONDS;
     }
 
     public function commit()
