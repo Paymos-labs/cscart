@@ -33,7 +33,7 @@ if (!function_exists('__')) {
  */
 function paymos_cscart_po_values($language)
 {
-    $text = (string) file_get_contents(PAYMOS_CSCART_PLUGIN_DIR . 'var/langs/' . $language . '/addons/paymos.po');
+    $text = str_replace("\r\n", "\n", (string) file_get_contents(PAYMOS_CSCART_PLUGIN_DIR . 'var/langs/' . $language . '/addons/paymos.po'));
     preg_match_all('/^msgctxt "Languages::([^"]+)"\nmsgid "(?:[^"\\\\]|\\\\.)*"\nmsgstr "((?:[^"\\\\]|\\\\.)*)"/m', $text, $matches, PREG_SET_ORDER);
     $values = array();
     foreach ($matches as $match) {

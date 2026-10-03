@@ -162,6 +162,9 @@ final class WebhookProcessor
         // late cancelled/expired/underpaid after paid) must never downgrade an
         // already-paid order. Reverse-verify covers forgery, not delivery order.
         if ($this->wouldRollBackPaidOrder($config, $order, $action)) {
+            if ($action === StatusMapper::ACTION_PAYMENT_COMPLETE) {
+                $this->invoiceStore->updateStatus($event->invoiceId(), $event->status());
+            }
             if ($config->debugLogging()) {
                 $this->cscart->log('Paymos ignored a stale invoice status after payment completed. Invoice: ' . $event->invoiceId());
             }
@@ -204,10 +207,6 @@ final class WebhookProcessor
             }
         }
 
-        // Persist the snapshot status only after the roll-back and amount guards
-        // have passed, so a rejected stale event never overwrites the snapshot.
-        $this->invoiceStore->updateStatus($event->invoiceId(), $event->status());
-
         $response = array(
             'order_status' => $this->statusForAction($config, $action),
             'reason_text' => $this->commentForAction($action, $event),
@@ -215,6 +214,7 @@ final class WebhookProcessor
         );
 
         $this->cscart->finishPayment((int) $row['cscart_order_id'], $response);
+        $this->invoiceStore->updateStatus($event->invoiceId(), $event->status());
 
         return $action === StatusMapper::ACTION_PAYMENT_COMPLETE;
     }
@@ -334,6 +334,7 @@ final class WebhookProcessor
         }
 
         return in_array($action, array(
+            StatusMapper::ACTION_PAYMENT_COMPLETE,
             StatusMapper::ACTION_CONFIRMING,
             StatusMapper::ACTION_AWAITING_PAYMENT,
             StatusMapper::ACTION_FAIL_ORDER,
