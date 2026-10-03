@@ -244,6 +244,8 @@ function test_cscart_webhook_does_not_roll_back_paid_order_on_late_cancel()
 
 final class FakeCsCartAdapter implements PaymosCsCart\CsCartAdapterInterface
 {
+    public $failBeforePayment = false;
+    public $failAfterPayment = false;
     /** @var array<int, array<string, mixed>> */
     public $orders = array();
 
@@ -265,10 +267,19 @@ final class FakeCsCartAdapter implements PaymosCsCart\CsCartAdapterInterface
 
     public function finishPayment($orderId, array $ppResponse)
     {
+        if ($this->failBeforePayment) {
+            $this->failBeforePayment = false;
+            throw new RuntimeException('Failure before CMS payment');
+        }
         $this->finished[] = array(
             'order_id' => (int) $orderId,
             'response' => $ppResponse,
         );
+        $this->orders[(int) $orderId]['status'] = $ppResponse['order_status'];
+        if ($this->failAfterPayment) {
+            $this->failAfterPayment = false;
+            throw new RuntimeException('Failure after CMS payment');
+        }
     }
 
     public function log($message, array $context = array())
