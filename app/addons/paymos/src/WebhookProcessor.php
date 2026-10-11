@@ -176,12 +176,38 @@ final class WebhookProcessor
         // guard above only protects paid orders; a Failed or Canceled one was
         // moved again by a stale underpaid_waiting or confirming. The recorded
         // invoice status is what decides, and it stays final.
+
+        // invoice-late-payment: money crossed the invoice's total AFTER it closed. The order keeps
+        // its decision — finishPayment re-asserts the order's CURRENT status with the late fact as
+        // the reason text (a note, not a transition), plus a per-invoice marker in the row store,
+        // before the stale-after-final guard above (a late event arrives after a terminal status by
+        // definition). No payment, stock or status change.
+        if ($action === StatusMapper::ACTION_NOTE_PAID_LATE) {
+            if (!empty($row['paid_late_noted'])) {
+                if ($config->debugLogging()) {
+                    $this->cscart->log('Paymos paid-late note already recorded. Invoice: ' . $event->invoiceId());
+                }
+                return false;
+            }
+
+            $response = array(
+                'order_status' => $this->scalar($order, 'status', $config->status('paid')),
+                'reason_text' => 'Paymos: payment arrived after the invoice deadline and covered the full amount. Invoice: ' . $event->invoiceId(),
+                'transaction_id' => $this->transactionId($event),
+            );
+            $this->cscart->finishPayment((int) $row['cscart_order_id'], $response);
+            $row['paid_late_noted'] = $event->id() !== '' ? $event->id() : '1';
+            $this->invoiceStore->save($row);
+            return false;
+        }
+
         if (StatusMapper::isFinalStatus(isset($row['status']) ? (string) $row['status'] : '')) {
             if ($config->debugLogging()) {
                 $this->cscart->log('Paymos ignored an invoice status that arrived after a final one. Invoice: ' . $event->invoiceId());
             }
             return false;
         }
+
 
         if ($action === StatusMapper::ACTION_PAYMENT_COMPLETE) {
             // Order total is in the primary currency; compare against the order's
