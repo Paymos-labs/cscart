@@ -52,6 +52,7 @@ $testFiles = array(
     __DIR__ . '/CheckoutProcessorTest.php',
     __DIR__ . '/CheckoutNoticeTest.php',
     __DIR__ . '/WebhookProcessorTest.php',
+    __DIR__ . '/PaidLateCallbackTest.php',
     __DIR__ . '/CrashRecoveryTest.php',
 );
 
