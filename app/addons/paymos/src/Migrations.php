@@ -34,6 +34,7 @@ final class Migrations
             payment_url text NOT NULL,
             status varchar(64) NOT NULL,
             renew_count int(11) unsigned NOT NULL DEFAULT 0,
+            paid_late_noted varchar(128) NULL,
             created_at datetime NOT NULL,
             updated_at datetime NOT NULL,
             PRIMARY KEY (id),
@@ -42,6 +43,7 @@ final class Migrations
             KEY cscart_order_id (cscart_order_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         self::ensureCharset(self::INVOICES_TABLE);
+        self::ensurePaidLateNoted();
 
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_events (
             event_id varchar(128) NOT NULL,
@@ -62,6 +64,25 @@ final class Migrations
      * @param string $table
      * @return void
      */
+    /**
+     * Tables created before invoice-late-payment lack the paid-late marker column; SHOW COLUMNS works on
+     * MySQL and MariaDB alike, so the ALTER runs once per store.
+     *
+     * @return void
+     */
+    private static function ensurePaidLateNoted()
+    {
+        if (!function_exists('db_get_field')) {
+            return;
+        }
+
+        if (db_get_field("SHOW COLUMNS FROM ?:paymos_invoices LIKE 'paid_late_noted'")) {
+            return;
+        }
+
+        db_query('ALTER TABLE ?:paymos_invoices ADD COLUMN paid_late_noted varchar(128) NULL');
+    }
+
     private static function ensureCharset($table)
     {
         if (!function_exists('db_get_row')) {

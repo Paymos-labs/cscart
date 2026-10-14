@@ -63,7 +63,7 @@ function test_cscart_paid_late_notes_with_current_status_and_changes_nothing()
     assertSameValue(1, count($adapter->finished), 'paid_late must produce exactly one finishPayment call.');
     assertSameValue('C', $adapter->finished[0]['response']['order_status'], 'the call re-asserts the CURRENT status — not a transition.');
     assertTrueValue(
-        strpos($adapter->finished[0]['response']['reason_text'], 'arrived after the invoice deadline') !== false,
+        strpos($adapter->finished[0]['response']['reason_text'], 'finished paying for this order after the invoice closed') !== false,
         'reason_text names the late fact.'
     );
     assertSameValue('C', $adapter->orders[42]['status'], 'the order status stays as it was.');

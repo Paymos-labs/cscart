@@ -192,7 +192,7 @@ final class WebhookProcessor
 
             $response = array(
                 'order_status' => $this->scalar($order, 'status', $config->status('paid')),
-                'reason_text' => 'Paymos: payment arrived after the invoice deadline and covered the full amount. Invoice: ' . $event->invoiceId(),
+                'reason_text' => 'Paymos: the customer finished paying for this order after the invoice closed. Check stock, then fulfil the order manually or refund the payment. Invoice: ' . $event->invoiceId(),
                 'transaction_id' => $this->transactionId($event),
             );
             $this->cscart->finishPayment((int) $row['cscart_order_id'], $response);
