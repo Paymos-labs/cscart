@@ -221,6 +221,7 @@ function test_cscart_webhook_does_not_roll_back_paid_order_on_late_cancel()
                         'invoice_id' => 'inv_123',
                         'project_id' => 'prj_123',
                         'status' => 'cancelled',
+                        'is_test' => true,
                         'order' => array(
                             'external_id' => 'cscart_42_0',
                             'amount' => '100',
@@ -300,6 +301,7 @@ function cscart_reverse_verification_client()
                 'invoice_id' => 'inv_123',
                 'project_id' => 'prj_123',
                 'status' => 'paid',
+                'is_test' => true,
                 'order' => array(
                     'external_id' => 'cscart_42_0',
                     // Server trims trailing zeros ("100.00" -> "100"); the snapshot
