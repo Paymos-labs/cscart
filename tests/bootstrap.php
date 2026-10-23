@@ -189,6 +189,7 @@ final class FakePaymosInvoices
             'invoice_id' => 'inv_123',
             'project_id' => 'prj_123',
             'status' => 'paid',
+            'is_test' => true,
             'order' => array(
                 'external_id' => 'cscart_42_0',
                 // Server trims trailing zeros ("100.00" -> "100"); snapshot is
