@@ -159,6 +159,11 @@ function paymos_cscart_reset_test_state()
     if (class_exists('PaymosCsCart\\Config') && method_exists('PaymosCsCart\\Config', 'resetForTests')) {
         PaymosCsCart\Config::resetForTests();
     }
+    // EventStoreTest defines the global db_* helpers for the whole run; its
+    // fake table state must not leak between tests.
+    if (class_exists('PaymosCsCartFakeDbState')) {
+        PaymosCsCartFakeDbState::reset();
+    }
 }
 
 function paymos_cscart_write_generated_config($php)
