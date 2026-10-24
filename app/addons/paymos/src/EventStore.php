@@ -11,6 +11,17 @@ final class EventStore implements CommitAwareEventStoreInterface
     /** @var string */
     private $pendingEventId = '';
 
+    /**
+     * Owner token of the reservation remember() took (A10-02). Each successful
+     * remember() mints a fresh random token; commit()/release() match it in
+     * their WHERE clause, so a delivery whose reservation expired (and whose
+     * event id was taken over by a newer delivery) can no longer delete or
+     * commit the successor's row.
+     *
+     * @var string
+     */
+    private $pendingOwnerToken = '';
+
     /** @var int */
     private $pendingTtlSeconds = 0;
 
@@ -41,6 +52,8 @@ final class EventStore implements CommitAwareEventStoreInterface
             return false;
         }
 
+        $ownerToken = bin2hex(random_bytes(16));
+
         try {
             // In-flight row gets only a short reservation; commit() extends it to
             // the full TTL after the order update succeeds. RESERVATION_SECONDS is
@@ -48,6 +61,7 @@ final class EventStore implements CommitAwareEventStoreInterface
             // still loses the dedup race while the lock is held.
             db_query('INSERT INTO ?:paymos_events ?e', array(
                 'event_id' => $eventId,
+                'owner_token' => $ownerToken,
                 'expires_at' => $now + self::RESERVATION_SECONDS,
                 'created_at' => $now,
             ));
@@ -56,6 +70,7 @@ final class EventStore implements CommitAwareEventStoreInterface
         }
 
         $this->pendingEventId = $eventId;
+        $this->pendingOwnerToken = $ownerToken;
         $this->pendingTtlSeconds = $ttlSeconds;
 
         return true;
@@ -84,31 +99,70 @@ final class EventStore implements CommitAwareEventStoreInterface
         return $expiresAt > time() && $expiresAt > $createdAt + self::RESERVATION_SECONDS;
     }
 
+    /**
+     * Extend the reservation to the full dedup window — but only if this store
+     * instance still owns it. Zero matched rows mean a newer delivery took the
+     * event id over after this reservation expired (A10-02): that successor's
+     * row must stay untouched, and the commit is reported as not owned (false),
+     * not as an error.
+     *
+     * @return bool True when this owner's row was extended; false when nothing
+     *              was pending or the reservation was lost to a successor.
+     */
     public function commit()
     {
         if ($this->pendingEventId === '' || !function_exists('db_query')) {
-            return;
+            return false;
         }
 
+        $eventId = $this->pendingEventId;
+        $ownerToken = $this->pendingOwnerToken;
+
         db_query(
-            'UPDATE ?:paymos_events SET expires_at = ?i WHERE event_id = ?s',
+            'UPDATE ?:paymos_events SET expires_at = ?i WHERE event_id = ?s AND owner_token = ?s',
             time() + ($this->pendingTtlSeconds > 0 ? $this->pendingTtlSeconds : 300),
-            $this->pendingEventId
+            $eventId,
+            $ownerToken
         );
 
+        // db_query() does not report affected rows, so ownership is confirmed
+        // by reading the row back: it is still ours exactly when the token
+        // written by this remember() is the one in the row.
+        $row = function_exists('db_get_row')
+            ? db_get_row('SELECT owner_token FROM ?:paymos_events WHERE event_id = ?s', $eventId)
+            : null;
+        $stillOwner = is_array($row)
+            && count($row) > 0
+            && isset($row['owner_token'])
+            && (string) $row['owner_token'] === $ownerToken;
+
         $this->pendingEventId = '';
+        $this->pendingOwnerToken = '';
         $this->pendingTtlSeconds = 0;
+
+        return $stillOwner;
     }
 
+    /**
+     * Drop the in-flight lock so the server can retry a failed processing run.
+     * Only this owner's row is deleted: when the reservation expired and a
+     * newer delivery owns the event id now, release() completes silently and
+     * leaves the successor's row alone (A10-02).
+     */
     public function release()
     {
         if ($this->pendingEventId === '' || !function_exists('db_query')) {
             return;
         }
 
-        db_query('DELETE FROM ?:paymos_events WHERE event_id = ?s', $this->pendingEventId);
+        db_query(
+            'DELETE FROM ?:paymos_events WHERE event_id = ?s AND owner_token = ?s',
+            $this->pendingEventId,
+            $this->pendingOwnerToken
+        );
 
         $this->pendingEventId = '';
+        $this->pendingOwnerToken = '';
         $this->pendingTtlSeconds = 0;
     }
 }

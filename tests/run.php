@@ -54,6 +54,7 @@ $testFiles = array(
     __DIR__ . '/WebhookProcessorTest.php',
     __DIR__ . '/PaidLateCallbackTest.php',
     __DIR__ . '/CrashRecoveryTest.php',
+    __DIR__ . '/EventStoreTest.php',
 );
 
 foreach ($testFiles as $file) {

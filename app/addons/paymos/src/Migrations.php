@@ -47,12 +47,40 @@ final class Migrations
 
         db_query("CREATE TABLE IF NOT EXISTS ?:paymos_events (
             event_id varchar(128) NOT NULL,
+            owner_token char(32) NOT NULL DEFAULT '',
             expires_at int(11) unsigned NOT NULL,
             created_at int(11) unsigned NOT NULL,
             PRIMARY KEY (event_id),
             KEY expires_at (expires_at)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         self::ensureCharset(self::EVENTS_TABLE);
+        self::ensureEventOwnerToken();
+    }
+
+    /**
+     * Tables created before the owner-token reservation fix (A10-02) lack the
+     * `owner_token` column. Old rows keep '' and never match a live owner
+     * token, so they simply expire via their reservation TTL (<=300s) — no
+     * data migration is needed, and the takeover window closes itself.
+     *
+     * @return void
+     */
+    private static function ensureEventOwnerToken()
+    {
+        if (!function_exists('db_get_field') || !function_exists('db_query')) {
+            return;
+        }
+
+        if (db_get_field("SHOW COLUMNS FROM ?:paymos_events LIKE 'owner_token'")) {
+            return;
+        }
+
+        try {
+            db_query("ALTER TABLE ?:paymos_events ADD COLUMN owner_token char(32) NOT NULL DEFAULT ''");
+        } catch (\Throwable $e) {
+            // A store whose ALTER failed keeps working until the next request
+            // retries it; expired rows still age out by TTL.
+        }
     }
 
     /**
