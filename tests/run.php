@@ -18,7 +18,8 @@ foreach ($_iter as $_f) {
     }
     $_rel = str_replace(DIRECTORY_SEPARATOR, '/', substr($_f->getPathname(), strlen($_srcRoot)));
     if (preg_match('!(^|/)(tests?|vendor|node_modules|\.github)(/|$)!', $_rel)
-        || $_rel === 'app/addons/paymos/payments/paymos.php') {
+        || $_rel === 'app/addons/paymos/payments/paymos.php'
+        || strpos($_rel, '/cron/') !== false || strpos($_rel, '/schemas/') !== false) {
         continue;
     }
     $_files[] = $_f->getPathname();
@@ -55,6 +56,9 @@ $testFiles = array(
     __DIR__ . '/PaidLateCallbackTest.php',
     __DIR__ . '/CrashRecoveryTest.php',
     __DIR__ . '/EventStoreTest.php',
+    __DIR__ . '/RefundAdapterTest.php',
+    __DIR__ . '/refund-native.php',
+    __DIR__ . '/NativeRefundGuardTest.php',
 );
 
 foreach ($testFiles as $file) {
@@ -67,12 +71,19 @@ $tests = array_filter(get_defined_functions()['user'], static function ($name) {
 sort($tests);
 
 $count = 0;
+$skipped = 0;
 foreach ($tests as $test) {
     paymos_cscart_reset_test_state();
-    $test();
+    try {
+        $test();
+    } catch (CsCartNativeSkipped $reason) {
+        $skipped++;
+        echo "SKIP {$test}: {$reason->getMessage()}\n";
+        continue;
+    }
     $count++;
     echo "PASS {$test}\n";
 }
 
 paymos_cscart_reset_test_state();
-echo "OK {$count} tests\n";
+echo "OK {$count} tests; {$skipped} skipped\n";

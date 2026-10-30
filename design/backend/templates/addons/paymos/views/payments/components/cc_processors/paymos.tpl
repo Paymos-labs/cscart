@@ -1,4 +1,24 @@
 <div class="control-group">
+    <label class="control-label" for="paymos-refund-order">Refund an order</label>
+    <div class="controls">
+        <input type="number" min="1" id="paymos-refund-order" class="input-small" aria-label="Order ID" />
+        <button type="button" class="btn" id="paymos-refund-open" data-url="{"paymos.refunds"|fn_url|escape}">Open</button>
+    </div>
+</div>
+<script>
+{literal}
+(function () {
+    var button = document.getElementById('paymos-refund-open');
+    button.addEventListener('click', function () {
+        var orderId = document.getElementById('paymos-refund-order').value;
+        if (!/^[1-9][0-9]*$/.test(orderId)) return;
+        window.location.href = button.getAttribute('data-url') + '&order_id=' + encodeURIComponent(orderId);
+    });
+}());
+{/literal}
+</script>
+
+<div class="control-group">
     <label class="control-label" for="paymos_mode">{__("paymos.mode")}</label>
     <div class="controls">
         <select name="payment_data[processor_params][mode]" id="paymos_mode">
