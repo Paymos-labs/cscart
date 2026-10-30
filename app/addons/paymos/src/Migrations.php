@@ -55,6 +55,7 @@ final class Migrations
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         self::ensureCharset(self::EVENTS_TABLE);
         self::ensureEventOwnerToken();
+        RefundSchema::ensure();
     }
 
     /**

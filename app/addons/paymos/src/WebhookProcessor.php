@@ -30,16 +30,20 @@ final class WebhookProcessor
     /** @var callable|null */
     private $clientFactory;
 
+    private $refundAdapter;
+
     public function __construct(
         CsCartAdapterInterface $cscart,
         InvoiceStoreInterface $invoiceStore,
         EventStoreInterface $eventStore,
-        ?callable $clientFactory = null
+        ?callable $clientFactory = null,
+        ?RefundAdapter $refundAdapter = null
     ) {
         $this->cscart = $cscart;
         $this->invoiceStore = $invoiceStore;
         $this->eventStore = $eventStore;
         $this->clientFactory = $clientFactory;
+        $this->refundAdapter = $refundAdapter;
     }
 
     /**
@@ -67,6 +71,17 @@ final class WebhookProcessor
             $event = $verified->event();
 
             if (!$event->isInvoiceEvent()) {
+                if (strpos($event->type(), 'withdrawal.') === 0) {
+                    $data = $event->toArray()['data'] ?? array();
+                    if (!empty($data['invoice_id']) || !empty($data['mode'])) {
+                        $adapter = $this->refundAdapter;
+                        if ($adapter === null) {
+                            RefundSchema::ensure();
+                            $adapter = new RefundAdapter(new RefundIntentStore());
+                        }
+                        $adapter->handleVerifiedWebhook($event, $environment);
+                    }
+                }
                 $this->commitEvent();
                 return new CallbackResult(200, 'OK');
             }
