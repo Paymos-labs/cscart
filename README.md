@@ -111,9 +111,30 @@ Before a terminal event is applied, the invoice is read back from the Merchant A
 against the snapshot in `paymos_invoices`: environment, project, external order id and invoice id
 all have to agree.
 
-This add-on ships no local reconciliation job, so redelivery is the recovery path. One cycle is 11
-attempts over roughly 16 hours, which absorbs a storefront that was briefly down. An event that
-outlives the ladder can be replayed by hand from the Paymos dashboard.
+Invoice status updates have no local reconciliation cron, so webhook redelivery is the invoice
+recovery path. One cycle is 11 attempts over roughly 16 hours, which absorbs a storefront that was
+briefly down. An invoice event that outlives the ladder can be replayed by hand from the Paymos
+dashboard.
+
+## Refunds
+
+The add-on supports native refunds through the Paymos Merchant API (`/v1/refunds`) in two modes:
+
+- `full` — refunds the full paid invoice amount;
+- `overpayment` — refunds only the excess received on an `invoice.paid_over` order.
+
+Funds return exclusively to the verified `first_sender` wallet address captured by Paymos when the
+invoice was paid. No manual recipient wallet address is entered, and arbitrary partial refund
+amounts are not supported.
+
+To manage refunds in the CS-Cart admin panel, open `dispatch=paymos.refunds&order_id=<order_id>`
+(**Paymos refunds**, requiring permission to edit orders). The screen displays the refundable
+amounts and verified `first_sender` address, provides **Refund in full** (`full`) and **Refund
+overpayment** (`overpayment`) actions (`paymos.refund`), and lets you check in-flight operations
+(`paymos.refund_reconcile`). Pending refunds are also reconciled by signed webhooks and by the CLI
+cron script `php app/addons/paymos/cron/refunds.php`, updating the order only after Paymos confirms
+`completed`. Sandbox mode supports simulating terminal refund outcomes (`completed`, `failed`,
+`cancelled`).
 
 ## Troubleshooting
 
