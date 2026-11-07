@@ -1,6 +1,6 @@
 {
   "source_repository": "Paymos-labs/paymos",
   "source_path": "plugins/cscart-paymos",
-  "source_commit": "3fcb34552a69e2341923640abe2229dac898a8cd",
-  "version": "1.5.4"
+  "source_commit": "b62fa2189b8ab98b4361399c656968bf66086b76",
+  "version": "1.5.5"
 }
