@@ -5,6 +5,43 @@ declare(strict_types=1);
 use PaymosCsCart\CheckoutProcessor;
 use PaymosCsCart\InMemoryInvoiceStore;
 
+function test_cscart_checkout_paid_observation_does_not_suppress_payment_callback()
+{
+    foreach (array('paid', 'paid_over') as $status) {
+        cscart_checkout_config_for_renewal();
+        $store = cscart_store_with_existing_link('awaiting_client');
+        $invoices = new SequencedPaymosInvoices(array(array('invoice_id' => 'inv_existing',
+            'payment_url' => 'https://paymos.test/pay/inv_existing', 'status' => $status)));
+        (new CheckoutProcessor($store, static function () use ($invoices) { return $invoices; }))
+            ->start(42, cscart_order(), cscart_processor_params());
+        assertSameValue('awaiting_client', $store->findByCsCartOrderId(42)['status'], 'Checkout did not apply native payment.');
+        $event = cscart_invoice_event('evt_checkout_race_' . $status, 'invoice.' . $status, $status,
+            array('data' => array('invoice_id' => 'inv_existing')));
+        $adapter = new FakeCsCartAdapter();
+        $processor = new \PaymosCsCart\WebhookProcessor($adapter, $store, new \Paymos\Webhook\InMemoryEventStore(),
+            static function () use ($event) {
+                return new \Paymos\Client(new \Paymos\ClientConfig('pk_test_123', 'sk_test_123', 'https://api.paymos.test'),
+                    new \Paymos\Http\MockTransport(array(new \Paymos\Http\HttpResponse(200, json_encode($event['data']), array()))));
+            });
+        $body = json_encode($event);
+        assertSameValue(200, $processor->handle($body, cscart_signed_header('whsec_sandbox', $body, 1709000000),
+            cscart_processor_params(), 1709000000)->statusCode(), 'The paid callback remains applicable.');
+        assertSameValue(1, count($adapter->finished), 'Native payment is completed once.');
+        assertSameValue($status, $store->findByCsCartOrderId(42)['status'], 'Only callback records applied terminal state.');
+    }
+}
+
+function test_cscart_checkout_preserves_an_already_applied_paid_snapshot()
+{
+    cscart_checkout_config_for_renewal();
+    $store = cscart_store_with_existing_link('paid');
+    $invoices = new SequencedPaymosInvoices(array(array('invoice_id' => 'inv_existing',
+        'payment_url' => 'https://paymos.test/pay/inv_existing', 'status' => 'paid')));
+    (new CheckoutProcessor($store, static function () use ($invoices) { return $invoices; }))
+        ->start(42, cscart_order(), cscart_processor_params());
+    assertSameValue('paid', $store->findByCsCartOrderId(42)['status'], 'Applied final state remains final.');
+}
+
 function test_cscart_checkout_creates_invoice_and_stores_snapshot()
 {
     paymos_cscart_reset_test_state();
@@ -32,14 +69,14 @@ function test_cscart_checkout_creates_invoice_and_stores_snapshot()
     assertSameValue('inv_123', $result['invoice_id'], 'CS-Cart checkout must return Paymos invoice id.');
     assertSameValue('https://paymos.test/pay/inv_123', $result['payment_url'], 'CS-Cart checkout must return hosted checkout URL.');
     assertSameValue('prj_123', $invoices->payloads[0]['project_id'], 'CS-Cart checkout payload must include project id.');
-    assertSameValue('100.00', $invoices->payloads[0]['amount'], 'CS-Cart checkout payload must keep order amount as a string.');
+    assertSameValue('100', $invoices->payloads[0]['amount'], 'CS-Cart checkout payload must keep order amount as a string.');
     assertSameValue('USD', $invoices->payloads[0]['currency'], 'CS-Cart checkout payload must use order currency.');
     assertSameValue('cscart_42_0', $invoices->payloads[0]['external_order_id'], 'CS-Cart checkout payload must use stable external order id.');
     assertSameValue('77', $invoices->payloads[0]['client_id'], 'CS-Cart checkout must use user_id as client_id, not email.');
 
     $row = $store->findByCsCartOrderId(42);
     assertSameValue('inv_123', $row['paymos_invoice_id'], 'CS-Cart checkout must store invoice snapshot.');
-    assertSameValue('100.00', $row['amount'], 'CS-Cart checkout must store amount snapshot.');
+    assertSameValue('100', $row['amount'], 'CS-Cart checkout must store amount snapshot.');
 }
 
 function test_cscart_checkout_invoices_in_primary_currency_not_secondary()
@@ -201,6 +238,27 @@ function cscart_checkout_config_for_renewal()
             ),
         ),
     )");
+}
+
+function test_cscart_checkout_preserves_three_decimal_currency_and_renews_on_third_digit_change()
+{
+    cscart_checkout_config_for_renewal();
+    $store = new InMemoryInvoiceStore();
+    $invoices = new SequencedPaymosInvoices(array(
+        array('invoice_id' => 'inv_first', 'payment_url' => 'https://paymos.test/pay/inv_first', 'status' => 'awaiting_client'),
+        array('invoice_id' => 'inv_second', 'payment_url' => 'https://paymos.test/pay/inv_second', 'status' => 'awaiting_client'),
+    ));
+    $invoices->cancelAnswers = array(array('invoice_id' => 'inv_first', 'status' => 'cancelled', 'is_final' => true));
+    $processor = new CheckoutProcessor($store, static function () use ($invoices) {
+        return $invoices;
+    });
+    $processor->start(42, cscart_order(array('total' => '10.001', 'currency' => 'BHD')), cscart_processor_params());
+    assertSameValue('10.001', $invoices->payloads[0]['amount'], 'BHD invoice must retain its third decimal digit.');
+    assertSameValue('10.001', $store->findByCsCartOrderId(42)['amount'], 'BHD snapshot keeps the exact amount.');
+    $processor->start(42, cscart_order(array('total' => '10.002', 'currency' => 'BHD')), cscart_processor_params());
+    assertSameValue('10.002', $invoices->payloads[1]['amount'], 'Renewed BHD invoice keeps the changed exact amount.');
+    assertSameValue('cscart_42_1', $invoices->payloads[1]['external_order_id'], 'Third digit change bumps the external ID.');
+    assertSameValue(array('create', 'cancel inv_first', 'create'), $invoices->calls, 'Old invoice is closed before replacement.');
 }
 
 function cscart_store_with_existing_link($status)

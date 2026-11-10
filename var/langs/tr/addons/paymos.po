@@ -64,3 +64,102 @@ msgstr "Paymos payment needs manual review."
 msgctxt "Languages::paymos.replacement_blocked"
 msgid "The store needs to review this order before payment can continue. Please contact the store."
 msgstr "Bu siparişi önce mağaza incelemeli, ödemeye ancak sonra devam edebilirsiniz. Lütfen mağazayla iletişime geçin."
+
+msgctxt "Languages::paymos.refund_order"
+msgid "Order"
+msgstr "Sipariş"
+
+
+msgctxt "Languages::paymos.refund_full"
+msgid "Full refund"
+msgstr "Tam iade"
+
+
+msgctxt "Languages::paymos.refund_overpayment"
+msgid "Overpayment refund"
+msgstr "Fazla ödeme iadesi"
+
+
+msgctxt "Languages::paymos.refund_recipient"
+msgid "Recipient"
+msgstr "Alıcı"
+
+
+msgctxt "Languages::paymos.refund_full_action"
+msgid "Refund in full"
+msgstr "Tamamını iade et"
+
+
+msgctxt "Languages::paymos.refund_overpayment_action"
+msgid "Refund overpayment"
+msgstr "Fazla ödemeyi iade et"
+
+
+msgctxt "Languages::paymos.refund_type"
+msgid "Type"
+msgstr "Tür"
+
+
+msgctxt "Languages::paymos.refund_transfer_record"
+msgid "Transfer / record"
+msgstr "Transfer / kayıt"
+
+
+msgctxt "Languages::paymos.refund_amount"
+msgid "Amount"
+msgstr "Tutar"
+
+
+msgctxt "Languages::paymos.refund_order_total"
+msgid "Order total"
+msgstr "Sipariş toplamı"
+
+
+msgctxt "Languages::paymos.refund_reason"
+msgid "Reason"
+msgstr "Neden"
+
+
+msgctxt "Languages::paymos.refund_check_full"
+msgid "Check full refund"
+msgstr "Tam iadeyi kontrol et"
+
+
+msgctxt "Languages::paymos.refund_check_overpayment"
+msgid "Check overpayment refund"
+msgstr "Fazla ödeme iadesini kontrol et"
+
+
+msgctxt "Languages::paymos.refund_external"
+msgid "Refund made outside CS-Cart"
+msgstr "CS-Cart dışında yapılan iade"
+
+
+msgctxt "Languages::paymos.refunds"
+msgid "Paymos refunds"
+msgstr "Paymos iadeleri"
+
+
+msgctxt "Languages::paymos.refund_unavailable"
+msgid "Refunds through Paymos are not available for this order right now. If this happens on every order, reconnect the add-on with Connect Paymos in the payment method settings."
+msgstr "Bu sipariş için şu anda Paymos üzerinden iade yapılamıyor. Tüm siparişlerde aynı sorun varsa ödeme yöntemi ayarlarından eklentiyi Paymos’a yeniden bağlayın."
+
+
+msgctxt "Languages::paymos.refunds_open_failed"
+msgid "Paymos refunds cannot be opened for this order. Check that the order ID is right and the order uses the Paymos payment method."
+msgstr "Bu siparişin Paymos iadeleri açılamadı. Sipariş numarasını ve ödeme yönteminin Paymos olduğunu kontrol edin."
+
+
+msgctxt "Languages::paymos.refund_request_failed"
+msgid "The refund request did not complete; the reason is in the PHP error log. Check the refunds on this order before you try again."
+msgstr "İade talebi tamamlanamadı. Nedeni PHP hata günlüğünde yer alıyor. Tekrar denemeden önce bu siparişin iadelerini kontrol edin."
+
+
+msgctxt "Languages::paymos.refund_check_failed"
+msgid "The refund status could not be checked; the reason is in the PHP error log. Try again later."
+msgstr "İade durumu kontrol edilemedi. Nedeni PHP hata günlüğünde yer alıyor. Daha sonra tekrar deneyin."
+
+
+msgctxt "Languages::paymos.refund_reconnect_required"
+msgid "Refunds through Paymos are not available on the current connection. Reconnect the add-on with Connect Paymos in the payment method settings, then try again."
+msgstr "Mevcut bağlantıyla Paymos iadesi yapılamıyor. Ödeme yöntemi ayarlarından eklentiyi Paymos’a yeniden bağlayıp tekrar deneyin."

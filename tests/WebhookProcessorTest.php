@@ -6,6 +6,53 @@ use Paymos\Webhook\InMemoryEventStore;
 use PaymosCsCart\InMemoryInvoiceStore;
 use PaymosCsCart\WebhookProcessor;
 
+function test_cscart_webhook_evidence_mismatches_are_400_and_leave_delivery_retryable()
+{
+    foreach (array('project', 'invoice', 'snapshot_environment', 'payload_environment') as $case) {
+        cscart_checkout_config_for_renewal();
+        $store = new InMemoryInvoiceStore();
+        $row = array('cscart_order_id' => 42, 'paymos_invoice_id' => 'inv_123',
+            'external_order_id' => 'cscart_42_0', 'environment' => 'sandbox', 'project_id' => 'prj_123',
+            'amount' => '100.00', 'currency' => 'USD', 'payment_url' => 'https://paymos.test/pay/inv_123',
+            'status' => 'awaiting_client', 'renew_count' => 0);
+        if ($case === 'snapshot_environment') { $row['environment'] = 'live'; }
+        $store->save($row);
+        $event = cscart_invoice_event('evt_bad_evidence_' . $case, 'invoice.paid', 'paid');
+        if ($case === 'project') { $event['data']['project_id'] = 'prj_other'; }
+        if ($case === 'invoice') { $event['data']['invoice_id'] = 'inv_other'; }
+        if ($case === 'payload_environment') { $event['data']['is_test'] = false; }
+        $adapter = new FakeCsCartAdapter();
+        $events = new CommitAwareTestEventStore();
+        $processor = new WebhookProcessor($adapter, $store, $events,
+            static function () { return cscart_reverse_verification_client(); });
+        $body = json_encode($event);
+        $result = $processor->handle($body, cscart_signed_header('whsec_sandbox', $body, 1709000000), cscart_processor_params(), 1709000000);
+        assertSameValue(400, $result->statusCode(), 'Explicit invoice evidence mismatch must be a 400: ' . $case);
+        assertSameValue(0, count($adapter->finished), 'Mismatched evidence cannot alter the native payment.');
+        assertSameValue(false, isset($events->events[$event['event_id']]), 'Rejected evidence must not consume its event ID.');
+        $row['environment'] = 'sandbox';
+        $store->save($row);
+        $corrected = json_encode(cscart_invoice_event($event['event_id'], 'invoice.paid', 'paid'));
+        $result = $processor->handle($corrected, cscart_signed_header('whsec_sandbox', $corrected, 1709000000), cscart_processor_params(), 1709000000);
+        assertSameValue(200, $result->statusCode(), 'Corrected evidence can retry the same event.');
+        assertSameValue(1, count($adapter->finished), 'Recovery completes payment once.');
+    }
+}
+
+function test_cscart_webhook_database_failure_remains_500()
+{
+    cscart_checkout_config_for_renewal();
+    $events = new class implements \Paymos\Webhook\EventStoreInterface {
+        public function remember($eventId, $ttlSeconds) { throw new RuntimeException('Storage unavailable.'); }
+    };
+    $body = json_encode(cscart_invoice_event('evt_storage_failed', 'invoice.paid', 'paid'));
+    $adapter = new FakeCsCartAdapter();
+    $result = (new WebhookProcessor($adapter, new InMemoryInvoiceStore(), $events))->handle(
+        $body, cscart_signed_header('whsec_sandbox', $body, 1709000000), cscart_processor_params(), 1709000000);
+    assertSameValue(500, $result->statusCode(), 'Storage failures retain server-error classification.');
+    assertSameValue(0, count($adapter->finished), 'Unavailable storage cannot finish a native payment.');
+}
+
 function test_cscart_webhook_finishes_paid_order_after_verified_webhook_and_reverse_lookup()
 {
     paymos_cscart_reset_test_state();
@@ -52,6 +99,37 @@ function test_cscart_webhook_finishes_paid_order_after_verified_webhook_and_reve
     assertSameValue(42, $adapter->finished[0]['order_id'], 'CS-Cart paid webhook must finish the matching order.');
     assertSameValue('P', $adapter->finished[0]['response']['order_status'], 'CS-Cart paid webhook must use paid status.');
     assertSameValue('inv_123', $adapter->finished[0]['response']['transaction_id'], 'CS-Cart paid webhook must use invoice id as transaction id.');
+}
+
+function test_cscart_webhook_preserves_three_decimal_amount_in_native_guard()
+{
+    cscart_checkout_config_for_renewal();
+    foreach (array('10.001', '10.002') as $nativeAmount) {
+        $store = new InMemoryInvoiceStore();
+        $store->save(array('cscart_order_id' => 42, 'paymos_invoice_id' => 'inv_123',
+            'external_order_id' => 'cscart_42_0', 'environment' => 'sandbox', 'project_id' => 'prj_123',
+            'amount' => '10.001', 'currency' => 'BHD', 'payment_url' => 'https://paymos.test/pay/inv_123',
+            'status' => 'awaiting_client', 'renew_count' => 0));
+        $adapter = new FakeCsCartAdapter();
+        $adapter->orders[42]['total'] = $nativeAmount;
+        $adapter->orders[42]['currency'] = 'BHD';
+        $event = cscart_invoice_event('evt_precision', 'invoice.paid', 'paid', array(
+            'data' => array('order' => array('amount' => '10.001', 'currency' => 'BHD'))));
+        $processor = new WebhookProcessor($adapter, $store, new InMemoryEventStore(), static function () use ($event) {
+            return new Paymos\Client(new Paymos\ClientConfig('pk_test_123', 'sk_test_123', 'https://api.paymos.test', 30),
+                new Paymos\Http\MockTransport(array(new Paymos\Http\HttpResponse(200, json_encode($event['data']), array()))));
+        });
+        $body = json_encode($event);
+        $result = $processor->handle($body, cscart_signed_header('whsec_sandbox', $body, 1709000000), cscart_processor_params(), 1709000000);
+        if ($nativeAmount === '10.001') {
+            assertSameValue(200, $result->statusCode(), 'Exact BHD amount must be accepted.');
+            assertSameValue(1, count($adapter->finished), 'Matching amount completes once.');
+        } else {
+            assertSameValue(400, $result->statusCode(), 'Third decimal drift must be rejected.');
+            assertSameValue(0, count($adapter->finished), 'Changed amount must never complete payment.');
+            assertSameValue('awaiting_client', $store->findByExternalOrderId('cscart_42_0')['status'], 'Rejected payment remains retryable.');
+        }
+    }
 }
 
 function test_cscart_webhook_uses_confirmed_transfer_hash_as_transaction_id()

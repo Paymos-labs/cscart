@@ -9,6 +9,7 @@ use Paymos\Plugin\AmountGuard;
 use Paymos\Plugin\InvoiceRenewal;
 use Paymos\Plugin\InvoiceReplacement;
 use Paymos\Plugin\InvoiceReplacementBlockedException;
+use Paymos\Plugin\StatusMapper;
 
 final class CheckoutProcessor
 {
@@ -30,6 +31,21 @@ final class CheckoutProcessor
      * @return array<string, string>
      */
     public function start($orderId, array $orderInfo, array $processorParams)
+    {
+        return $this->store->synchronized($orderId, function () use ($orderId, $orderInfo, $processorParams) {
+            // Read the native total again after acquiring the same mutex as callbacks.
+            if (function_exists('fn_get_order_info')) {
+                $fresh = fn_get_order_info((int) $orderId);
+                if (!is_array($fresh) || !$fresh) {
+                    throw new \RuntimeException('CS-Cart order could not be reloaded.');
+                }
+                $orderInfo = $fresh;
+            }
+            return $this->startLocked($orderId, $orderInfo, $processorParams);
+        });
+    }
+
+    private function startLocked($orderId, array $orderInfo, array $processorParams)
     {
         $config = Config::fromProcessorParams($processorParams);
         // CS-Cart order `total` is always denominated in the primary currency, so
@@ -81,6 +97,7 @@ final class CheckoutProcessor
             // The server's own answer for the old id: closed as it says, or
             // cancelled first if it is merely past its deadline.
             $this->closeBeforeReplacing(array(
+                'cscart_order_id' => (int) $orderId,
                 'paymos_invoice_id' => $this->responseField($response, array('invoice_id')),
                 'environment' => $config->environment(),
                 'status' => $this->responseField($response, array('status')),
@@ -98,6 +115,7 @@ final class CheckoutProcessor
             throw new \RuntimeException('Paymos invoice create response is missing invoice id or payment URL.');
         }
 
+        $this->store->assertLocked($orderId);
         $this->store->save(array(
             'cscart_order_id' => (int) $orderId,
             'paymos_invoice_id' => $paymosInvoiceId,
@@ -107,7 +125,12 @@ final class CheckoutProcessor
             'amount' => $amount,
             'currency' => $currency,
             'payment_url' => $paymentUrl,
-            'status' => $this->responseField($response, array('status')) ?: 'awaiting_client',
+            // Only a native callback may record an applied terminal decision.
+            // Reopening checkout must leave a newly observed paid invoice retryable.
+            'status' => $reused && (string) $existing['paymos_invoice_id'] === $paymosInvoiceId
+                ? (string) $existing['status']
+                : (StatusMapper::isFinalStatus($this->responseField($response, array('status')))
+                    ? 'awaiting_client' : ($this->responseField($response, array('status')) ?: 'awaiting_client')),
             'renew_count' => $renewCount,
         ));
 
@@ -177,6 +200,7 @@ final class CheckoutProcessor
         // invoice's own webhook (invoice.cancelled after our cancel) finds a
         // final row and is ignored as stale.
         if ($result->status() !== '' && $result->status() !== $recorded) {
+            $this->store->assertLocked($row['cscart_order_id']);
             $this->store->updateStatus((string) $row['paymos_invoice_id'], $result->status());
         }
     }
@@ -206,7 +230,11 @@ final class CheckoutProcessor
 
     private function formatAmount($amount)
     {
-        return number_format((float) $amount, 2, '.', '');
+        $normalized = AmountGuard::normalizeDecimal($amount);
+        if ($normalized === null || $normalized === '0' || $normalized[0] === '-') {
+            throw new \RuntimeException('CS-Cart order amount must be a positive decimal.');
+        }
+        return $normalized;
     }
 
     /**

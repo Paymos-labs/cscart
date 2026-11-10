@@ -65,3 +65,102 @@ msgstr "Paymos payment needs manual review."
 msgctxt "Languages::paymos.replacement_blocked"
 msgid "The store needs to review this order before payment can continue. Please contact the store."
 msgstr "商家需要先审核这笔订单，之后才能继续付款。请联系商家。"
+
+msgctxt "Languages::paymos.refund_order"
+msgid "Order"
+msgstr "订单"
+
+
+msgctxt "Languages::paymos.refund_full"
+msgid "Full refund"
+msgstr "全额退款"
+
+
+msgctxt "Languages::paymos.refund_overpayment"
+msgid "Overpayment refund"
+msgstr "退还多付金额"
+
+
+msgctxt "Languages::paymos.refund_recipient"
+msgid "Recipient"
+msgstr "收款人"
+
+
+msgctxt "Languages::paymos.refund_full_action"
+msgid "Refund in full"
+msgstr "全额退款"
+
+
+msgctxt "Languages::paymos.refund_overpayment_action"
+msgid "Refund overpayment"
+msgstr "退还多付金额"
+
+
+msgctxt "Languages::paymos.refund_type"
+msgid "Type"
+msgstr "类型"
+
+
+msgctxt "Languages::paymos.refund_transfer_record"
+msgid "Transfer / record"
+msgstr "转账 / 记账"
+
+
+msgctxt "Languages::paymos.refund_amount"
+msgid "Amount"
+msgstr "金额"
+
+
+msgctxt "Languages::paymos.refund_order_total"
+msgid "Order total"
+msgstr "订单总额"
+
+
+msgctxt "Languages::paymos.refund_reason"
+msgid "Reason"
+msgstr "原因"
+
+
+msgctxt "Languages::paymos.refund_check_full"
+msgid "Check full refund"
+msgstr "查询全额退款"
+
+
+msgctxt "Languages::paymos.refund_check_overpayment"
+msgid "Check overpayment refund"
+msgstr "查询多付金额退款"
+
+
+msgctxt "Languages::paymos.refund_external"
+msgid "Refund made outside CS-Cart"
+msgstr "在 CS-Cart 外发起的退款"
+
+
+msgctxt "Languages::paymos.refunds"
+msgid "Paymos refunds"
+msgstr "Paymos 退款"
+
+
+msgctxt "Languages::paymos.refund_unavailable"
+msgid "Refunds through Paymos are not available for this order right now. If this happens on every order, reconnect the add-on with Connect Paymos in the payment method settings."
+msgstr "此订单目前无法通过 Paymos 退款。如果所有订单都出现此问题，请在付款方式设置中重新连接 Paymos 插件。"
+
+
+msgctxt "Languages::paymos.refunds_open_failed"
+msgid "Paymos refunds cannot be opened for this order. Check that the order ID is right and the order uses the Paymos payment method."
+msgstr "无法打开此订单的 Paymos 退款。请核对订单编号，并确认订单使用 Paymos 付款。"
+
+
+msgctxt "Languages::paymos.refund_request_failed"
+msgid "The refund request did not complete; the reason is in the PHP error log. Check the refunds on this order before you try again."
+msgstr "退款请求未完成，原因见 PHP 错误日志。请先检查此订单的退款，再重试。"
+
+
+msgctxt "Languages::paymos.refund_check_failed"
+msgid "The refund status could not be checked; the reason is in the PHP error log. Try again later."
+msgstr "无法查询退款状态，原因见 PHP 错误日志。请稍后重试。"
+
+
+msgctxt "Languages::paymos.refund_reconnect_required"
+msgid "Refunds through Paymos are not available on the current connection. Reconnect the add-on with Connect Paymos in the payment method settings, then try again."
+msgstr "当前连接无法使用 Paymos 退款。请在付款方式设置中重新连接插件，然后重试。"

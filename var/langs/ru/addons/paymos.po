@@ -64,3 +64,102 @@ msgstr "Оплату Paymos нужно проверить вручную."
 msgctxt "Languages::paymos.replacement_blocked"
 msgid "The store needs to review this order before payment can continue. Please contact the store."
 msgstr "Магазину нужно проверить этот заказ, прежде чем вы сможете продолжить оплату. Обратитесь в магазин."
+
+msgctxt "Languages::paymos.refund_order"
+msgid "Order"
+msgstr "Заказ"
+
+
+msgctxt "Languages::paymos.refund_full"
+msgid "Full refund"
+msgstr "Полный возврат"
+
+
+msgctxt "Languages::paymos.refund_overpayment"
+msgid "Overpayment refund"
+msgstr "Возврат переплаты"
+
+
+msgctxt "Languages::paymos.refund_recipient"
+msgid "Recipient"
+msgstr "Получатель"
+
+
+msgctxt "Languages::paymos.refund_full_action"
+msgid "Refund in full"
+msgstr "Вернуть всю сумму"
+
+
+msgctxt "Languages::paymos.refund_overpayment_action"
+msgid "Refund overpayment"
+msgstr "Вернуть переплату"
+
+
+msgctxt "Languages::paymos.refund_type"
+msgid "Type"
+msgstr "Тип"
+
+
+msgctxt "Languages::paymos.refund_transfer_record"
+msgid "Transfer / record"
+msgstr "Перевод / учёт"
+
+
+msgctxt "Languages::paymos.refund_amount"
+msgid "Amount"
+msgstr "Сумма"
+
+
+msgctxt "Languages::paymos.refund_order_total"
+msgid "Order total"
+msgstr "Сумма заказа"
+
+
+msgctxt "Languages::paymos.refund_reason"
+msgid "Reason"
+msgstr "Причина"
+
+
+msgctxt "Languages::paymos.refund_check_full"
+msgid "Check full refund"
+msgstr "Проверить полный возврат"
+
+
+msgctxt "Languages::paymos.refund_check_overpayment"
+msgid "Check overpayment refund"
+msgstr "Проверить возврат переплаты"
+
+
+msgctxt "Languages::paymos.refund_external"
+msgid "Refund made outside CS-Cart"
+msgstr "Возврат вне CS-Cart"
+
+
+msgctxt "Languages::paymos.refunds"
+msgid "Paymos refunds"
+msgstr "Возвраты Paymos"
+
+
+msgctxt "Languages::paymos.refund_unavailable"
+msgid "Refunds through Paymos are not available for this order right now. If this happens on every order, reconnect the add-on with Connect Paymos in the payment method settings."
+msgstr "Сейчас возврат через Paymos для этого заказа недоступен. Если это происходит со всеми заказами, подключите модуль заново кнопкой «Подключить Paymos» в настройках способа оплаты."
+
+
+msgctxt "Languages::paymos.refunds_open_failed"
+msgid "Paymos refunds cannot be opened for this order. Check that the order ID is right and the order uses the Paymos payment method."
+msgstr "Не удалось открыть возвраты Paymos. Проверьте номер заказа и убедитесь, что для него выбран способ оплаты Paymos."
+
+
+msgctxt "Languages::paymos.refund_request_failed"
+msgid "The refund request did not complete; the reason is in the PHP error log. Check the refunds on this order before you try again."
+msgstr "Не удалось завершить запрос возврата. Причина указана в журнале ошибок PHP. Перед повторной попыткой проверьте возвраты по этому заказу."
+
+
+msgctxt "Languages::paymos.refund_check_failed"
+msgid "The refund status could not be checked; the reason is in the PHP error log. Try again later."
+msgstr "Не удалось проверить статус возврата. Причина указана в журнале ошибок PHP. Попробуйте позже."
+
+
+msgctxt "Languages::paymos.refund_reconnect_required"
+msgid "Refunds through Paymos are not available on the current connection. Reconnect the add-on with Connect Paymos in the payment method settings, then try again."
+msgstr "Возвраты Paymos недоступны при текущем подключении. Подключите модуль заново кнопкой «Подключить Paymos» в настройках способа оплаты и повторите попытку."

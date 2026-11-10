@@ -63,10 +63,12 @@ final class WebhookProcessor
      */
     public function handle($rawBody, $signatureHeader, array $processorParams, $now = null)
     {
+        $reserved = false;
         try {
             $config = Config::fromProcessorParams($processorParams);
             $verified = (new MultiEnvironmentWebhookVerifier($config->webhookSecrets(), $this->eventStore))
                 ->process($signatureHeader, $rawBody, $now);
+            $reserved = true;
             $environment = $verified->environment();
             $event = $verified->event();
 
@@ -95,15 +97,18 @@ final class WebhookProcessor
             $this->debugLog($processorParams, 'Paymos duplicate webhook ignored.', array('duplicate' => true));
             return new CallbackResult(200, 'OK', true);
         } catch (EventInProgressException $e) {
-            // Another delivery of this event holds the lock and has not finished.
-            // Not a duplicate: a 2xx would mark it delivered even if that delivery
-            // then fails. 409 makes the server retry; the lock is not ours to drop.
+            if ($reserved) { $this->releaseEvent(); }
+            // The event or its order is busy. Release only our event reservation;
+            // another delivery's reservation remains owner-fenced.
             $this->debugLog($processorParams, 'Paymos webhook is still being processed by another delivery.', array('in_progress' => true));
             return new CallbackResult(409, 'In progress');
         } catch (SignatureMismatchException $e) {
             return new CallbackResult(401, 'Bad signature');
         } catch (TimestampSkewException $e) {
             return new CallbackResult(401, 'Bad timestamp');
+        } catch (\DomainException $e) {
+            $this->releaseEvent();
+            return new CallbackResult(400, 'Invalid invoice evidence');
         } catch (\InvalidArgumentException $e) {
             $this->releaseEvent();
             $this->cscart->log('Paymos CS-Cart configuration error.', array('error' => $e->getMessage()));
@@ -111,14 +116,14 @@ final class WebhookProcessor
         } catch (\RuntimeException $e) {
             $this->releaseEvent();
             $this->cscart->log('Paymos CS-Cart webhook processing failed.', array('error' => $e->getMessage()));
-            return new CallbackResult(400, 'Processing failed');
+            return new CallbackResult(500, 'Processing failed');
         } catch (\Throwable $e) {
             // A PHP Error (e.g. a TypeError in a third-party order hook) during
             // mutation must still release the in-flight dedup lock, otherwise the
             // event is durably marked seen and the order is never retried.
             $this->releaseEvent();
             $this->cscart->log('Paymos CS-Cart webhook processing failed.', array('error' => $e->getMessage()));
-            return new CallbackResult(400, 'Processing failed');
+            return new CallbackResult(500, 'Processing failed');
         }
     }
 
@@ -129,7 +134,7 @@ final class WebhookProcessor
     {
         $externalOrderId = $event->externalOrderId();
         if ($externalOrderId === '') {
-            throw new \RuntimeException('Paymos webhook payload is missing external order id.');
+            throw new \DomainException('Paymos webhook payload is missing external order id.');
         }
 
         $row = $this->invoiceStore->findByExternalOrderId($externalOrderId);
@@ -146,8 +151,27 @@ final class WebhookProcessor
      */
     private function applyEventToCsCart(WebhookEvent $event, $environment, array $row, array $processorParams, $reverseVerify)
     {
+        return $this->invoiceStore->synchronized($row['cscart_order_id'], function () use ($event, $environment, $row, $processorParams, $reverseVerify) {
+            $fresh = $this->invoiceStore->findByExternalOrderId($event->externalOrderId());
+            if (!is_array($fresh) || (int) $fresh['cscart_order_id'] !== (int) $row['cscart_order_id']) {
+                throw new \RuntimeException('Paymos invoice snapshot changed while acquiring its lock.');
+            }
+            return $this->applyLockedEventToCsCart($event, $environment, $fresh, $processorParams, $reverseVerify);
+        });
+    }
+
+    private function applyLockedEventToCsCart(WebhookEvent $event, $environment, array $row, array $processorParams, $reverseVerify)
+    {
         $config = Config::fromProcessorParams($processorParams);
         $this->assertRowMatchesEvent($row, $event, $environment);
+
+        if (StatusMapper::invoiceAction($event->type(), $event->status()) !== StatusMapper::ACTION_NOTE_PAID_LATE
+            && StatusMapper::isFinalStatus(isset($row['status']) ? (string) $row['status'] : '')) {
+            if ($config->debugLogging()) {
+                $this->cscart->log('Paymos ignored an invoice status that arrived after a final one. Invoice: ' . $event->invoiceId());
+            }
+            return false;
+        }
 
         if ($reverseVerify && $this->requiresReverseVerify($event)) {
             $result = (new InvoiceReverseVerifier($this->client($environment, $processorParams)))->verify($event, array(
@@ -158,10 +182,11 @@ final class WebhookProcessor
             ));
 
             if (!$result->isVerified()) {
-                throw new \RuntimeException('Paymos reverse verification failed: ' . $result->reason());
+                throw new \DomainException('Paymos reverse verification failed: ' . $result->reason());
             }
         }
 
+        $this->invoiceStore->assertLocked($row['cscart_order_id']);
         $action = StatusMapper::invoiceAction($event->type(), $event->status());
 
         if ($action === StatusMapper::ACTION_IGNORE) {
@@ -216,14 +241,6 @@ final class WebhookProcessor
             return false;
         }
 
-        if (StatusMapper::isFinalStatus(isset($row['status']) ? (string) $row['status'] : '')) {
-            if ($config->debugLogging()) {
-                $this->cscart->log('Paymos ignored an invoice status that arrived after a final one. Invoice: ' . $event->invoiceId());
-            }
-            return false;
-        }
-
-
         if ($action === StatusMapper::ACTION_PAYMENT_COMPLETE) {
             // Order total is in the primary currency; compare against the order's
             // primary currency, consistent with how the invoice was created.
@@ -237,7 +254,7 @@ final class WebhookProcessor
                 $event->orderAmount(),
                 $event->orderCurrency()
             )) {
-                throw new \RuntimeException(AmountGuard::mismatchSummary(
+                throw new \DomainException(AmountGuard::mismatchSummary(
                     $row['amount'],
                     $row['currency'],
                     $currentAmount,
@@ -306,16 +323,16 @@ final class WebhookProcessor
     private function assertRowMatchesEvent(array $row, WebhookEvent $event, $environment)
     {
         if ((string) $row['environment'] !== (string) $environment) {
-            throw new \RuntimeException('Paymos event environment does not match CS-Cart invoice snapshot.');
+            throw new \DomainException('Paymos event environment does not match CS-Cart invoice snapshot.');
         }
         if ((string) $row['project_id'] !== '' && $event->projectId() !== '' && (string) $row['project_id'] !== $event->projectId()) {
-            throw new \RuntimeException('Paymos event project does not match CS-Cart invoice snapshot.');
+            throw new \DomainException('Paymos event project does not match CS-Cart invoice snapshot.');
         }
         if ((string) $row['external_order_id'] !== '' && $event->externalOrderId() !== '' && (string) $row['external_order_id'] !== $event->externalOrderId()) {
-            throw new \RuntimeException('Paymos event external order does not match CS-Cart invoice snapshot.');
+            throw new \DomainException('Paymos event external order does not match CS-Cart invoice snapshot.');
         }
         if ((string) $row['paymos_invoice_id'] !== '' && $event->invoiceId() !== '' && (string) $row['paymos_invoice_id'] !== $event->invoiceId()) {
-            throw new \RuntimeException('Paymos event invoice id does not match CS-Cart invoice snapshot.');
+            throw new \DomainException('Paymos event invoice id does not match CS-Cart invoice snapshot.');
         }
     }
 
@@ -327,10 +344,10 @@ final class WebhookProcessor
         }
 
         if ($environment === 'sandbox' && $isTest !== true) {
-            throw new \RuntimeException('Sandbox webhook payload is not marked as test.');
+            throw new \DomainException('Sandbox webhook payload is not marked as test.');
         }
         if ($environment === 'live' && $isTest !== false) {
-            throw new \RuntimeException('Live webhook payload is marked as test.');
+            throw new \DomainException('Live webhook payload is marked as test.');
         }
     }
 
@@ -440,7 +457,9 @@ final class WebhookProcessor
 
     private function formatAmount($value)
     {
-        return number_format((float) $value, 2, '.', '');
+        // Keep invalid native amounts invalid for AmountGuard, never rounded
+        // into an apparently matching payment amount.
+        return AmountGuard::normalizeDecimal($value);
     }
 
     /**

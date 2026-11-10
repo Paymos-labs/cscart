@@ -39,7 +39,7 @@ final class EventStore implements CommitAwareEventStoreInterface
     {
         Migrations::ensure();
         if (!function_exists('db_query') || !function_exists('db_get_field')) {
-            return true;
+            throw new \RuntimeException('CS-Cart database is unavailable.');
         }
 
         $eventId = (string) $eventId;
@@ -65,8 +65,17 @@ final class EventStore implements CommitAwareEventStoreInterface
                 'expires_at' => $now + self::RESERVATION_SECONDS,
                 'created_at' => $now,
             ));
-        } catch (\Exception $e) {
-            return false;
+        } catch (\Throwable $e) {
+            // Tygh drivers may wrap MySQL errors without preserving errno.
+            // Only a duplicate key is a reservation conflict; storage failures propagate.
+            for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+                if ((int) $cause->getCode() === 1062
+                    || ($cause instanceof \PDOException && (int) ($cause->errorInfo[1] ?? 0) === 1062)
+                    || preg_match('/\bDuplicate entry\b.*\bfor key\b/i', $cause->getMessage())) {
+                    return false;
+                }
+            }
+            throw $e;
         }
 
         $this->pendingEventId = $eventId;
@@ -85,7 +94,7 @@ final class EventStore implements CommitAwareEventStoreInterface
     public function isCommitted($eventId)
     {
         if (!function_exists('db_get_row')) {
-            return false;
+            throw new \RuntimeException('CS-Cart database is unavailable.');
         }
 
         $row = db_get_row('SELECT expires_at, created_at FROM ?:paymos_events WHERE event_id = ?s', (string) $eventId);

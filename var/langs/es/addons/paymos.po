@@ -69,3 +69,102 @@ msgstr "Paymos payment needs manual review."
 msgctxt "Languages::paymos.replacement_blocked"
 msgid "The store needs to review this order before payment can continue. Please contact the store."
 msgstr "La tienda tiene que revisar este pedido antes de que puedas continuar con el pago. Ponte en contacto con la tienda."
+
+msgctxt "Languages::paymos.refund_order"
+msgid "Order"
+msgstr "Pedido"
+
+
+msgctxt "Languages::paymos.refund_full"
+msgid "Full refund"
+msgstr "Reembolso completo"
+
+
+msgctxt "Languages::paymos.refund_overpayment"
+msgid "Overpayment refund"
+msgstr "Reembolso del exceso de pago"
+
+
+msgctxt "Languages::paymos.refund_recipient"
+msgid "Recipient"
+msgstr "Destinatario"
+
+
+msgctxt "Languages::paymos.refund_full_action"
+msgid "Refund in full"
+msgstr "Reembolsar todo"
+
+
+msgctxt "Languages::paymos.refund_overpayment_action"
+msgid "Refund overpayment"
+msgstr "Reembolsar el exceso"
+
+
+msgctxt "Languages::paymos.refund_type"
+msgid "Type"
+msgstr "Tipo"
+
+
+msgctxt "Languages::paymos.refund_transfer_record"
+msgid "Transfer / record"
+msgstr "Transferencia / registro"
+
+
+msgctxt "Languages::paymos.refund_amount"
+msgid "Amount"
+msgstr "Importe"
+
+
+msgctxt "Languages::paymos.refund_order_total"
+msgid "Order total"
+msgstr "Total del pedido"
+
+
+msgctxt "Languages::paymos.refund_reason"
+msgid "Reason"
+msgstr "Motivo"
+
+
+msgctxt "Languages::paymos.refund_check_full"
+msgid "Check full refund"
+msgstr "Consultar el reembolso completo"
+
+
+msgctxt "Languages::paymos.refund_check_overpayment"
+msgid "Check overpayment refund"
+msgstr "Consultar el reembolso del exceso"
+
+
+msgctxt "Languages::paymos.refund_external"
+msgid "Refund made outside CS-Cart"
+msgstr "Reembolso realizado fuera de CS-Cart"
+
+
+msgctxt "Languages::paymos.refunds"
+msgid "Paymos refunds"
+msgstr "Reembolsos de Paymos"
+
+
+msgctxt "Languages::paymos.refund_unavailable"
+msgid "Refunds through Paymos are not available for this order right now. If this happens on every order, reconnect the add-on with Connect Paymos in the payment method settings."
+msgstr "Los reembolsos de Paymos no están disponibles para este pedido por ahora. Si ocurre con todos los pedidos, vuelva a conectar el complemento desde los ajustes del método de pago."
+
+
+msgctxt "Languages::paymos.refunds_open_failed"
+msgid "Paymos refunds cannot be opened for this order. Check that the order ID is right and the order uses the Paymos payment method."
+msgstr "No se pueden abrir los reembolsos de Paymos para este pedido. Compruebe el número de pedido y que el método de pago sea Paymos."
+
+
+msgctxt "Languages::paymos.refund_request_failed"
+msgid "The refund request did not complete; the reason is in the PHP error log. Check the refunds on this order before you try again."
+msgstr "No se completó la solicitud de reembolso. El motivo figura en el registro de errores de PHP. Revise los reembolsos del pedido antes de volver a intentarlo."
+
+
+msgctxt "Languages::paymos.refund_check_failed"
+msgid "The refund status could not be checked; the reason is in the PHP error log. Try again later."
+msgstr "No se pudo consultar el estado del reembolso. El motivo figura en el registro de errores de PHP. Inténtelo más tarde."
+
+
+msgctxt "Languages::paymos.refund_reconnect_required"
+msgid "Refunds through Paymos are not available on the current connection. Reconnect the add-on with Connect Paymos in the payment method settings, then try again."
+msgstr "La conexión actual no permite reembolsos de Paymos. Vuelva a conectar el complemento desde los ajustes del método de pago e inténtelo de nuevo."

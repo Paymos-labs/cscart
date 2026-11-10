@@ -51,13 +51,13 @@ if (in_array($mode, array('refunds', 'refund', 'refund_reconcile'), true)) {
     } catch (\Throwable $exception) {
         if (function_exists('fn_set_notification')) {
             $refundNotices = array(
-                'refunds' => 'Paymos refunds cannot be opened for this order. Check that the order ID is right and the order uses the Paymos payment method.',
-                'refund' => 'The refund request did not complete; the reason is in the PHP error log. Check the refunds on this order before you try again.',
-                'refund_reconcile' => 'The refund status could not be checked; the reason is in the PHP error log. Try again later.',
+                'refunds' => 'paymos.refunds_open_failed',
+                'refund' => 'paymos.refund_request_failed',
+                'refund_reconcile' => 'paymos.refund_check_failed',
             );
             fn_set_notification('E', __('error'), $exception->getMessage() === 'refund_reconnect_required'
-                ? 'Refunds through Paymos are not available on the current connection. Reconnect the add-on with Connect Paymos in the payment method settings, then try again.'
-                : $refundNotices[$mode]);
+                ? __('paymos.refund_reconnect_required')
+                : __($refundNotices[$mode]));
         }
         error_log('[Paymos CS-Cart] ' . $exception->getMessage());
         return array(CONTROLLER_STATUS_DENIED);
