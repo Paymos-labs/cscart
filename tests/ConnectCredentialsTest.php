@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 // Separate processes isolate the controller's exit and platform function doubles.
 if (!isset($argv[1])) {
-    $cases = array('enabled', 'missing_capability', 'missing_contract', 'disabled', 'legacy', 'strict_flags');
+    $cases = array('enabled', 'missing_capability', 'missing_contract', 'disabled', 'legacy', 'strict_flags',
+        'stale_connected', 'stale_denied');
     foreach ($cases as $case) {
         $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' ' . escapeshellarg($case);
         passthru($command, $status);
@@ -53,6 +54,13 @@ function db_query($sql, ...$args)
 
 function db_get_field($sql, ...$args)
 {
+    if ($sql === 'SELECT DATABASE()') {
+        return 'cscart_connect_test';
+    }
+    if ($sql === 'SELECT GET_LOCK(?s, 10)' || $sql === 'SELECT RELEASE_LOCK(?s)') {
+        $GLOBALS['cscart_connect_locks'][] = $sql;
+        return '1';
+    }
     assertSameValue('SELECT value FROM ?:paymos_config WHERE name = ?s', $sql, 'Read the native config table.');
     return $GLOBALS['cscart_connect_config'][$args[0]] ?? '';
 }
@@ -110,6 +118,14 @@ final class CsCartConnectTransport implements \Paymos\Http\TransportInterface
         assertSameValue('https://app.paymos.io/connect/token', $url, 'Only the Connect token endpoint is called.');
         parse_str($body, $fields);
         assertSameValue('device-code-fixture', $fields['device_code'], 'Poll uses the persisted device code.');
+        if (in_array($GLOBALS['cscart_connect_case'], array('stale_connected', 'stale_denied'), true)) {
+            // 48-02: another administrator starts attempt B while this poll of A
+            // is waiting for its HTTP answer.
+            \PaymosCsCart\CredentialStore::startAttempt(array('device_code' => 'device-code-newer', 'expires_in' => 600));
+        }
+        if ($GLOBALS['cscart_connect_case'] === 'stale_denied') {
+            return new \Paymos\Http\HttpResponse(400, json_encode(array('error' => 'access_denied')), array());
+        }
         return new \Paymos\Http\HttpResponse(200, json_encode(array('paymos_config' => array(
             'plugin' => 'cscart', 'source_url' => 'https://cscart.example.test',
             'environments' => self::$credentials,
@@ -173,10 +189,15 @@ switch ($case) {
         $credentials['sandbox']['refunds_enabled'] = 'true';
         $reason = 'refund_submissions_disabled';
         break;
+    case 'stale_connected':
+    case 'stale_denied':
+        break;
     default:
         throw new RuntimeException('Unknown Connect test case.');
 }
 CsCartConnectTransport::$credentials = $credentials;
+$GLOBALS['cscart_connect_case'] = $case;
+$GLOBALS['cscart_connect_locks'] = array();
 \PaymosCsCart\CredentialStore::saveState(array('device_code' => 'device-code-fixture', 'expires_in' => 600));
 \PaymosCsCart\Config::useConfigForTests(array('environments' => array()));
 define('PRODUCT_VERSION', '4.20.1');
@@ -187,6 +208,24 @@ ob_start();
 
 register_shutdown_function(static function () use ($case, $credentials, $reason) {
     $response = ob_get_clean();
+    if (in_array($case, array('stale_connected', 'stale_denied'), true)) {
+        try {
+            $decoded = json_decode($response, true);
+            assertSameValue('This Paymos connection request was replaced by a newer one.', $decoded['error'] ?? null,
+                $case . ': a poll of a replaced attempt applies nothing.');
+            assertFalseValue(isset($GLOBALS['cscart_connect_config']['credentials_v1']),
+                $case . ': the older approval does not write credentials.');
+            assertSameValue('device-code-newer', \PaymosCsCart\CredentialStore::loadState()['device_code'] ?? null,
+                $case . ': the newer attempt survives the stale poll.');
+            assertSameValue(1, CsCartConnectTransport::$calls, $case . ': one poll.');
+            assertTrueValue(count($GLOBALS['cscart_connect_locks']) >= 4, $case . ': start and completion both run under the Connect lock.');
+            echo 'PASS Connect ' . $case . "\n";
+        } catch (Throwable $error) {
+            fwrite(STDERR, 'FAIL Connect ' . $case . ': ' . $error->getMessage() . "\n");
+            exit(1);
+        }
+        return;
+    }
     try {
         assertSameValue(array('status' => 'connected'), json_decode($response, true), 'The real Connect controller completes.');
         assertSameValue(1, CsCartConnectTransport::$calls, 'Connect polls exactly once.');

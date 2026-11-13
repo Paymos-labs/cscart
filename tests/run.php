@@ -87,3 +87,9 @@ foreach ($tests as $test) {
 
 paymos_cscart_reset_test_state();
 echo "OK {$count} tests; {$skipped} skipped\n";
+
+// The Connect controller exits; its fixture runs each case in its own process.
+passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/ConnectCredentialsTest.php'), $connectStatus);
+if ($connectStatus !== 0) {
+    exit($connectStatus);
+}

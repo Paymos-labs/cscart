@@ -76,7 +76,7 @@ try {
         // Paymos drops it unless it shares an origin with the storefront URL above.
         $returnUrl = isset($_POST['paymos_return_url']) ? (string) $_POST['paymos_return_url'] : '';
         $state = $client->start('cscart', $sourceUrl, $returnUrl);
-        \PaymosCsCart\CredentialStore::saveState($state);
+        \PaymosCsCart\CredentialStore::startAttempt($state);
         echo json_encode(array(
             'verification_url' => $state['verification_url'],
             'user_code' => $state['user_code'],
@@ -91,13 +91,17 @@ try {
     if (!isset($state['device_code'])) {
         throw new \RuntimeException('No active Paymos connection request.');
     }
-    $result = $client->poll((string) $state['device_code']);
+    $deviceCode = (string) $state['device_code'];
+    $result = $client->poll($deviceCode);
     if ($result['status'] === 'connected') {
         if ($result['plugin'] !== 'cscart' || rtrim((string) $result['source_url'], '/') !== $sourceUrl) {
             throw new \RuntimeException('Paymos connection response does not match this CS-Cart storefront.');
         }
-        \PaymosCsCart\CredentialStore::saveCredentials($result['credentials']);
-        \PaymosCsCart\CredentialStore::clearState();
+        // Applied only if no newer attempt replaced this one during the poll.
+        \PaymosCsCart\CredentialStore::whileCurrentAttempt($deviceCode, static function () use ($result) {
+            \PaymosCsCart\CredentialStore::saveCredentials($result['credentials']);
+            \PaymosCsCart\CredentialStore::clearState();
+        });
         \PaymosCsCart\Config::resetForTests();
         echo json_encode(array('status' => 'connected'));
         exit;
@@ -106,7 +110,9 @@ try {
         echo json_encode(array('status' => $result['status']));
         exit;
     }
-    \PaymosCsCart\CredentialStore::clearState();
+    \PaymosCsCart\CredentialStore::whileCurrentAttempt($deviceCode, static function () {
+        \PaymosCsCart\CredentialStore::clearState();
+    });
     throw new \RuntimeException('Paymos connection was denied or expired.');
 } catch (\Throwable $exception) {
     http_response_code(400);
