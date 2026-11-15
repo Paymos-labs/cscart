@@ -178,7 +178,8 @@ switch ($case) {
         break;
     case 'disabled':
         $credentials['sandbox']['refunds_enabled'] = false;
-        $reason = 'refund_submissions_disabled';
+        // Stale Connect refunds_enabled=false must not block valid v1 refund capability.
+        $reason = null;
         break;
     case 'legacy':
         unset($credentials['sandbox']['capabilities'], $credentials['sandbox']['refund_contract_version'],
@@ -187,7 +188,8 @@ switch ($case) {
         break;
     case 'strict_flags':
         $credentials['sandbox']['refunds_enabled'] = 'true';
-        $reason = 'refund_submissions_disabled';
+        // Strict storage normalizes non-boolean to false, which still allows valid v1 capability.
+        $reason = null;
         break;
     case 'stale_connected':
     case 'stale_denied':

@@ -167,6 +167,9 @@ final class CsCartRefundTestTransport implements TransportInterface
     public $corruptRead = array();
     public $errorStatus = 0;
     public $summaryAllowed = true;
+    public $omitSummary = false;
+    public $invoiceFailure = null;
+    public $invoiceStatus = 'paid_over';
     public $amounts = array('full' => '120', 'overpayment' => '20');
     public $invoiceAmount = '100';
 
@@ -209,10 +212,27 @@ final class CsCartRefundTestTransport implements TransportInterface
             }
             $response = $this->refunds[$key];
         } elseif ($path === '/v1/invoices/inv_123') {
+            if ($this->invoiceFailure !== null) {
+                $failure = $this->invoiceFailure;
+                $this->invoiceFailure = null;
+                if ($failure instanceof Throwable) { throw $failure; }
+                $status = (int) $failure;
+                return new HttpResponse($status, json_encode(array(
+                    'type' => 'https://api.paymos.io/errors/' . ($status === 404 ? 'not-found' : 'validation'),
+                    'title' => $status === 404 ? 'Not Found' : 'Bad Request',
+                    'status' => $status,
+                    'detail' => 'Simulated invoice read failure',
+                    'code' => $status === 404 ? 'invoice_not_found' : 'refund_denied',
+                )), array('content-type' => 'application/problem+json'));
+            }
             $response = array('invoice_id' => 'inv_123', 'project_id' => 'prj_123', 'is_test' => true,
+                'status' => $this->invoiceStatus,
                 'order' => array('external_id' => 'cscart_42_0', 'amount' => $this->invoiceAmount, 'currency' => 'USD'),
-                'refund_summary' => array('can_refund_full' => $this->summaryAllowed, 'can_refund_overpayment' => $this->summaryAllowed,
-                    'full_refund_amount' => $this->amounts['full'], 'overpayment_refund_amount' => $this->amounts['overpayment']));
+                'payment' => array('paid' => '120', 'currency' => 'USDT', 'network' => 'TRC20'));
+            if (!$this->omitSummary) {
+                $response['refund_summary'] = array('can_refund_full' => $this->summaryAllowed, 'can_refund_overpayment' => $this->summaryAllowed,
+                    'full_refund_amount' => $this->amounts['full'], 'overpayment_refund_amount' => $this->amounts['overpayment']);
+            }
         } else {
             $this->reads++;
             $response = null;
@@ -356,7 +376,6 @@ function test_cscart_refund_native_and_capability_guards_before_post()
         static function (&$n) { $n['processor']['addon'] = 'other'; },
         static function (&$n) { $n['connection']['sandbox']['capabilities'] = array(); },
         static function (&$n) { $n['connection']['sandbox']['refund_contract_version'] = 2; },
-        static function (&$n) { $n['connection']['sandbox']['refunds_enabled'] = false; },
         static function (&$n) { $n['snapshot']['project_id'] = 'prj_other'; },
         static function (&$n) { $n['company_id'] = 99; },
         static function (&$n) { $n['version'] = '4.18.1'; },
@@ -607,4 +626,89 @@ function test_cscart_refund_store_token_commit_restart_and_immutable_payload()
             cscart_refund_expect_error(static function () use ($restarted, $intent) { $restarted->createIntent($intent); }, 'refund_intent_requires_commit');
         });
     });
+}
+
+function test_cscart_refund_stale_connect_disabled_does_not_block_panel_or_submit()
+{
+    list($db, $store, $adapter, $http, $native) = cscart_refund_fixture();
+    $native->context['connection']['sandbox']['refunds_enabled'] = false;
+    $panel = $adapter->panel(42);
+    assertTrueValue($panel['can_full'], 'Stale refunds_enabled=false must not disable panel full button when capability and v1 contract are valid.');
+    assertTrueValue($panel['can_overpayment'], 'Stale refunds_enabled=false must not disable panel overpayment button.');
+    $intent = $adapter->submit(42, 'full', 'stale-connect-disabled-01');
+    assertSameValue('created', $intent->cashState(), 'Submission succeeds despite stale Connect refunds_enabled=false.');
+}
+
+function test_cscart_refund_without_summary_uses_nullable_amounts_and_suppresses_completed_overpayment()
+{
+    foreach (array('local', 'unbound') as $origin) {
+        list($db, $store, $adapter, $http) = cscart_refund_fixture();
+        $http->omitSummary = true;
+        $panel = $adapter->panel(42);
+        assertSameValue(null, $panel['summary']['full_refund_amount'], 'Fallback must never expose gross as full refund balance.');
+        assertSameValue(null, $panel['summary']['overpayment_refund_amount'], 'Fallback must never expose gross as overpayment refund balance.');
+        assertSameValue(array('currency' => 'USDT', 'network' => 'TRC20'), $panel['summary']['refund_asset'], 'Fallback preserves refund_asset.');
+        assertTrueValue($panel['can_full'], 'paid_over allows full refund without refund_summary.');
+        assertTrueValue($panel['can_overpayment'], 'paid_over allows initial overpayment without refund_summary.');
+
+        if ($origin === 'local') {
+            $over = $adapter->submit(42, 'overpayment', 'nosum-local-over-tok1');
+            assertSameValue('created', $over->cashState(), 'Initial local overpayment succeeds without refund_summary.');
+            $http->status('completed');
+            $adapter->reconcile($over->operationId());
+        } else {
+            $wire = array('withdrawal_id' => 'wd_external_over', 'invoice_id' => 'inv_123', 'project_id' => 'prj_123',
+                'external_order_id' => 'dashboard-over-key', 'mode' => 'overpayment', 'status' => 'completed', 'is_test' => true,
+                'amount' => '20', 'currency' => 'USDT', 'network' => 'TRC20',
+                'first_sender' => 'TFirstSender', 'destination_address' => 'TFirstSender');
+            $http->refunds['dashboard-over-key'] = $wire;
+            $signal = $wire;
+            unset($signal['project_id']);
+            $adapter->handleVerifiedWebhook(new WebhookEvent(array('event_type' => 'withdrawal.completed', 'data' => $signal)), 'sandbox');
+        }
+
+        $postsBefore = count($http->posts);
+        $afterPanel = $adapter->panel(42);
+        assertFalseValue($afterPanel['can_overpayment'], 'Completed ' . $origin . ' overpayment disables repeat overpayment button when summary is omitted.');
+        assertTrueValue($afterPanel['can_full'], 'Full refund remains available after completed overpayment.');
+
+        $blocked = $adapter->submit(42, 'overpayment', 'nosum-repeat-over-' . $origin);
+        assertSameValue('review', $blocked->cashState(), 'Repeat overpayment stops in review when summary is omitted after completed overpayment.');
+        assertSameValue('refund_server_action_unavailable', $blocked->toArray()['review_reason'], 'Preflight explains suppressed overpayment.');
+        assertSameValue($postsBefore, count($http->posts), 'Repeat overpayment sends no POST.');
+    }
+
+    list($db, $store, $adapter, $http) = cscart_refund_fixture();
+    $http->omitSummary = true;
+    $over = $adapter->submit(42, 'overpayment', 'nosum-over-before-full1');
+    $http->status('completed');
+    $adapter->reconcile($over->operationId());
+    $full = $adapter->submit(42, 'full', 'nosum-full-after-over01');
+    assertSameValue('created', $full->cashState(), 'Full refund remains eligible after completed overpayment when summary is omitted.');
+}
+
+function test_cscart_refund_preflight_transient_failures_return_retry_and_deterministic_errors_preserve_code()
+{
+    foreach (array(429, 502, new RuntimeException('read timeout')) as $idx => $failure) {
+        list($db, $store, $adapter, $http) = cscart_refund_fixture();
+        $token = 'cscart-retry-token-' . $idx;
+        $http->invoiceFailure = $failure;
+        $pending = $adapter->submit(42, 'full', $token);
+        assertSameValue('not_submitted', $pending->cashState(), 'Transient invoice read error leaves intent NOT_SUBMITTED.');
+        assertSameValue(Paymos\Plugin\NativeRefundProjectorInterface::PREFLIGHT_RETRY, $pending->toArray()['review_reason'], 'PREFLIGHT_RETRY is recorded cleanly.');
+        assertSameValue(array(), $http->posts, 'No refund POST before successful preflight.');
+
+        $recovered = $adapter->submit(42, 'full', $token);
+        assertSameValue('created', $recovered->cashState(), 'Retrying same token advances NOT_SUBMITTED once preflight recovers.');
+        assertSameValue(1, count($http->posts), 'Exactly one POST after preflight recovers.');
+    }
+
+    foreach (array(404 => 'invoice_not_found', 400 => 'refund_denied') as $status => $expectedCode) {
+        list($db, $store, $adapter, $http) = cscart_refund_fixture();
+        $http->invoiceFailure = $status;
+        $refused = $adapter->submit(42, 'full', 'cscart-err-tok-' . $status);
+        assertSameValue('review', $refused->cashState(), 'Deterministic API refusal moves intent to review.');
+        assertSameValue($expectedCode, $refused->toArray()['review_reason'], 'Review preserves API errorCode rather than generic preflight failure.');
+        assertSameValue(array(), $http->posts, 'Deterministic refusal sends no POST.');
+    }
 }
