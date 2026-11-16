@@ -446,3 +446,228 @@ function test_cscart_checkout_does_not_replace_an_invoice_the_server_answers_404
     assertSameValue(\Paymos\Plugin\InvoiceReplacementResult::REASON_NOT_FOUND, $e->result()->reason(), 'the 404 is the reason.');
     assertSameValue(array('cancel inv_existing'), $invoices->calls, 'no invoice is created after a 404.');
 }
+
+function test_cscart_checkout_single_product_and_optional_fields()
+{
+    cscart_checkout_config_for_renewal();
+    $store = new InMemoryInvoiceStore();
+    $invoices = new FakePaymosInvoices();
+    $processor = new CheckoutProcessor($store, static function () use ($invoices) {
+        return new FakePaymosClient($invoices);
+    });
+
+    $order = cscart_order(array(
+        'total' => '47.00',
+        'products' => array(
+            '1001' => array(
+                'product_id' => 501,
+                'product' => "<b>Canvas</b> &amp; Blue\0",
+                'product_options' => array(
+                    array('option_name' => 'Color', 'variant_name' => 'Blue'),
+                ),
+                'short_description' => "<p>Museum grade</p><p>Cotton\0</p>",
+                'main_pair' => array(
+                    'detailed' => array(
+                        'https_image_path' => 'https://shop.example/images/canvas.webp',
+                    ),
+                ),
+                'amount' => '2',
+                'price' => '24.50',
+            ),
+        ),
+    ));
+
+    $processor->start(42, $order, cscart_processor_params());
+    $payload = $invoices->payloads[0];
+    assertSameValue('47', $payload['amount'], 'CS-Cart native grand total must be preserved.');
+    assertSameValue(
+        array(
+            array(
+                'title' => 'Canvas & Blue (Color: Blue)',
+                'quantity' => 2,
+                'unit_amount' => '24.50',
+                'description' => "Museum grade\nCotton",
+                'image_url' => 'https://shop.example/images/canvas.webp',
+            ),
+        ),
+        $payload['products'],
+        'single CS-Cart product must map options, description, HTTPS image, and unit price.'
+    );
+
+    // Minimal product with blank short_description and http:// image omits optional fields without failing.
+    $minInvoices = new FakePaymosInvoices();
+    $minProcessor = new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($minInvoices) {
+        return new FakePaymosClient($minInvoices);
+    });
+    $minOrder = cscart_order(array(
+        'total' => '47.00',
+        'products' => array(
+            '1002' => array(
+                'product' => 'Canvas · Blue',
+                'short_description' => '<p>&nbsp;</p>',
+                'main_pair' => array(
+                    'detailed' => array(
+                        'image_path' => 'http://shop.example/insecure.png',
+                    ),
+                ),
+                'amount' => 2,
+                'price' => '24.50',
+            ),
+        ),
+    ));
+    $minProcessor->start(42, $minOrder, cscart_processor_params());
+    assertSameValue(
+        array(array('title' => 'Canvas · Blue', 'quantity' => 2, 'unit_amount' => '24.50')),
+        $minInvoices->payloads[0]['products'],
+        'blank short_description and http:// image_path must be omitted without failing item.'
+    );
+
+    // Three-decimal currency unit price keeps exact 3rd decimal digit.
+    $bhdInvoices = new FakePaymosInvoices();
+    $bhdProcessor = new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($bhdInvoices) {
+        return new FakePaymosClient($bhdInvoices);
+    });
+    $bhdProcessor->start(42, cscart_order(array(
+        'total' => '20.002',
+        'currency' => 'BHD',
+        'products' => array(
+            '1003' => array('product' => 'Precision Item', 'amount' => 2, 'price' => '10.001'),
+        ),
+    )), cscart_processor_params());
+    assertSameValue('10.001', $bhdInvoices->payloads[0]['products'][0]['unit_amount'], 'three-decimal currency unit_amount must keep third digit.');
+}
+
+function test_cscart_checkout_cart_products_and_all_or_nothing_fallback()
+{
+    cscart_checkout_config_for_renewal();
+    $invoices = new FakePaymosInvoices();
+    $processor = new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($invoices) {
+        return new FakePaymosClient($invoices);
+    });
+
+    $order = cscart_order(array(
+        'total' => '42.50',
+        'products' => array(
+            '2001' => array(
+                'product' => 'Canvas · Blue',
+                'short_description' => '<p>Giclée print</p>',
+                'main_pair' => array('detailed' => array('https_image_path' => 'https://shop.example/canvas.webp')),
+                'amount' => 2,
+                'price' => '15.00',
+            ),
+            'ship' => array('type' => 'shipping', 'product' => 'Delivery', 'amount' => 1, 'price' => '5.00'),
+            'disc' => array('type' => 'discount', 'product' => 'Coupon', 'amount' => 1, 'price' => '-5.00'),
+            '2002' => array(
+                'product' => 'Notebook',
+                'amount' => 1,
+                'price' => '12.50',
+            ),
+        ),
+    ));
+    $processor->start(42, $order, cscart_processor_params());
+    $payload = $invoices->payloads[0];
+    assertSameValue('42.5', $payload['amount'], 'CS-Cart native grand total must remain intact.');
+    assertSameValue(
+        array(
+            array(
+                'title' => 'Canvas · Blue',
+                'quantity' => 2,
+                'unit_amount' => '15.00',
+                'description' => 'Giclée print',
+                'image_url' => 'https://shop.example/canvas.webp',
+            ),
+            array(
+                'title' => 'Notebook',
+                'quantity' => 1,
+                'unit_amount' => '12.50',
+            ),
+        ),
+        $payload['products'],
+        'CS-Cart cart must preserve all valid lines and exclude shipping/discount rows.'
+    );
+
+    $fifty = array();
+    for ($i = 1; $i <= 50; $i++) {
+        $fifty[(string) $i] = array('product' => 'Item ' . $i, 'amount' => 1, 'price' => '1.00');
+    }
+    $fiftyOne = $fifty;
+    $fiftyOne['51'] = array('product' => 'Item 51', 'amount' => 1, 'price' => '1.00');
+
+    $maxInvoices = new FakePaymosInvoices();
+    (new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($maxInvoices) {
+        return new FakePaymosClient($maxInvoices);
+    }))->start(42, cscart_order(array('total' => '50.00', 'products' => $fifty)), cscart_processor_params());
+    assertSameValue(50, count($maxInvoices->payloads[0]['products']), 'exactly 50 CS-Cart items must be sent.');
+
+    $invalidCases = array(
+        'fractional_qty' => array(
+            '1' => array('product' => 'Valid', 'amount' => 1, 'price' => '20.00'),
+            '2' => array('product' => 'Fabric', 'amount' => 1.5, 'price' => '10.00'),
+        ),
+        'blank_title' => array(
+            '1' => array('product' => 'Valid', 'amount' => 1, 'price' => '20.00'),
+            '2' => array('product' => "<b>&nbsp;</b>\0", 'amount' => 1, 'price' => '5.00'),
+        ),
+        'negative_price' => array(
+            '1' => array('product' => 'Valid', 'amount' => 1, 'price' => '20.00'),
+            '2' => array('product' => 'Broken', 'amount' => 1, 'price' => '-5.00'),
+        ),
+        'over_50' => $fiftyOne,
+    );
+
+    foreach ($invalidCases as $label => $items) {
+        $caseInvoices = new FakePaymosInvoices();
+        (new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($caseInvoices) {
+            return new FakePaymosClient($caseInvoices);
+        }))->start(42, cscart_order(array('total' => '42.50', 'products' => $items)), cscart_processor_params());
+
+        $casePayload = $caseInvoices->payloads[0];
+        assertSameValue('42.5', $casePayload['amount'], $label . ': fallback preserves native amount.');
+        assertFalseValue(array_key_exists('products', $casePayload), $label . ': invalid CS-Cart cart reverts to amount-only.');
+    }
+}
+
+function test_cscart_checkout_retry_and_metadata_change_preserve_money_guards()
+{
+    cscart_checkout_config_for_renewal();
+    $store = new InMemoryInvoiceStore();
+    $invoices = new SequencedPaymosInvoices(array(
+        array('invoice_id' => 'inv_first', 'payment_url' => 'https://paymos.test/pay/inv_first', 'status' => 'awaiting_client'),
+        array('invoice_id' => 'inv_first', 'payment_url' => 'https://paymos.test/pay/inv_first', 'status' => 'awaiting_client'),
+        array('invoice_id' => 'inv_second', 'payment_url' => 'https://paymos.test/pay/inv_second', 'status' => 'awaiting_client'),
+    ));
+    $invoices->cancelAnswers[] = array('invoice_id' => 'inv_first', 'status' => 'cancelled');
+    $processor = new CheckoutProcessor($store, static function () use ($invoices) {
+        return $invoices;
+    });
+
+    $first = $processor->start(42, cscart_order(array(
+        'total' => '100.00',
+        'products' => array(
+            '1' => array('product' => 'Original Product', 'amount' => 1, 'price' => '100.00'),
+        ),
+    )), cscart_processor_params());
+    assertSameValue('0', $first['reused'], 'first create is not reused.');
+
+    // Same financial snapshot reuses the existing external_order_id even if product presentation changed.
+    $second = $processor->start(42, cscart_order(array(
+        'total' => '100.00',
+        'products' => array(
+            '1' => array('product' => 'Renamed Product', 'amount' => 2, 'price' => '50.00'),
+        ),
+    )), cscart_processor_params());
+    assertSameValue('1', $second['reused'], 'product metadata change alone must reuse matching financial snapshot.');
+    assertSameValue('cscart_42_0', $invoices->payloads[1]['external_order_id'], 'reused attempt keeps external_order_id.');
+
+    // Amount change cancels old invoice and cuts cscart_42_1 with current products.
+    $third = $processor->start(42, cscart_order(array(
+        'total' => '120.00',
+        'products' => array(
+            '1' => array('product' => 'Updated Product', 'amount' => 2, 'price' => '60.00'),
+        ),
+    )), cscart_processor_params());
+    assertSameValue('0', $third['reused'], 'amount change must create new invoice.');
+    assertSameValue(array('create', 'create', 'cancel inv_first', 'create'), $invoices->calls, 'create, idempotent reuse, cancel, bumped create.');
+    assertSameValue('cscart_42_1', $invoices->payloads[2]['external_order_id'], 'bumped external_order_id must be used.');
+    assertSameValue('Updated Product', $invoices->payloads[2]['products'][0]['title'], 'bumped invoice must include current products.');
+}

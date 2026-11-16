@@ -6,6 +6,7 @@ namespace PaymosCsCart;
 
 use Paymos\Client;
 use Paymos\Plugin\AmountGuard;
+use Paymos\Plugin\InvoicePresentation;
 use Paymos\Plugin\InvoiceRenewal;
 use Paymos\Plugin\InvoiceReplacement;
 use Paymos\Plugin\InvoiceReplacementBlockedException;
@@ -159,7 +160,200 @@ final class CheckoutProcessor
             $payload['client_id'] = $clientId;
         }
 
+        $products = $this->extractProducts($orderInfo);
+        if ($products !== null) {
+            $payload['products'] = $products;
+        }
+
         return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $orderInfo
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function extractProducts(array $orderInfo): ?array
+    {
+        if (!isset($orderInfo['products']) || !is_array($orderInfo['products']) || count($orderInfo['products']) === 0) {
+            return null;
+        }
+
+        $candidates = array();
+        foreach ($orderInfo['products'] as $item) {
+            if (!is_array($item)) {
+                return null;
+            }
+            if (isset($item['type']) && is_string($item['type'])
+                && in_array(strtolower(trim($item['type'])), array('shipping', 'discount', 'tax', 'fee', 'coupon', 'surcharge', 'note', 'gift_certificate'), true)) {
+                continue;
+            }
+
+            if (array_key_exists('unit_amount', $item)) {
+                $rawUnitAmount = $item['unit_amount'];
+            } elseif (array_key_exists('price', $item)) {
+                $rawUnitAmount = $item['price'];
+            } elseif (array_key_exists('base_price', $item)) {
+                $rawUnitAmount = $item['base_price'];
+            } else {
+                $rawUnitAmount = null;
+            }
+
+            $description = isset($item['description']) && is_string($item['description'])
+                ? $item['description']
+                : (isset($item['short_description']) && is_string($item['short_description'])
+                    ? $item['short_description']
+                    : null);
+
+            $candidates[] = array(
+                'title' => $this->productTitle($item),
+                'description' => $description,
+                'image_url' => $this->productImageUrl($item),
+                'quantity' => array_key_exists('quantity', $item)
+                    ? $item['quantity']
+                    : (array_key_exists('amount', $item) ? $item['amount'] : null),
+                'unit_amount' => self::formatUnitAmount($rawUnitAmount),
+            );
+        }
+
+        return InvoicePresentation::normalizeProducts($candidates);
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function productTitle(array $item): ?string
+    {
+        $base = array_key_exists('title', $item)
+            ? $item['title']
+            : (array_key_exists('product', $item) ? $item['product'] : null);
+        if (!is_string($base)) {
+            return null;
+        }
+
+        if (!isset($item['product_options']) || !is_array($item['product_options']) || count($item['product_options']) === 0) {
+            return $base;
+        }
+
+        $parts = array();
+        foreach ($item['product_options'] as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $name = isset($option['option_name']) && is_scalar($option['option_name']) ? trim((string) $option['option_name']) : '';
+            $value = '';
+            if (isset($option['variant_name']) && is_scalar($option['variant_name']) && trim((string) $option['variant_name']) !== '') {
+                $value = trim((string) $option['variant_name']);
+            } elseif (isset($option['value']) && is_scalar($option['value']) && trim((string) $option['value']) !== '') {
+                $value = trim((string) $option['value']);
+            }
+            if ($value === '') {
+                continue;
+            }
+            $parts[] = $name !== '' ? ($name . ': ' . $value) : $value;
+        }
+
+        if (count($parts) === 0) {
+            return $base;
+        }
+
+        $withOptions = $base . ' (' . implode(', ', $parts) . ')';
+        $chars = preg_split('//u', $withOptions, 201, PREG_SPLIT_NO_EMPTY);
+        if (is_array($chars) && count($chars) <= 200) {
+            return $withOptions;
+        }
+
+        return $base;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function productImageUrl(array $item): ?string
+    {
+        if (isset($item['image_url']) && is_string($item['image_url'])) {
+            return $item['image_url'];
+        }
+
+        if (isset($item['main_pair']) && is_array($item['main_pair'])) {
+            $fromPair = self::imageUrlFromPair($item['main_pair']);
+            if ($fromPair !== null) {
+                return $fromPair;
+            }
+        }
+
+        if (function_exists('fn_get_image_pairs') && isset($item['product_id']) && is_numeric($item['product_id']) && (int) $item['product_id'] > 0) {
+            try {
+                $pair = fn_get_image_pairs((int) $item['product_id'], 'product', 'M', true, true);
+                if (is_array($pair)) {
+                    return self::imageUrlFromPair($pair);
+                }
+            } catch (\Throwable $e) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $pair
+     */
+    private static function imageUrlFromPair(array $pair): ?string
+    {
+        $candidates = array(
+            $pair['detailed']['https_image_path'] ?? null,
+            $pair['icon']['https_image_path'] ?? null,
+            $pair['https_image_path'] ?? null,
+            $pair['detailed']['image_path'] ?? null,
+            $pair['icon']['image_path'] ?? null,
+            $pair['image_path'] ?? null,
+        );
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param mixed $raw
+     */
+    private static function formatUnitAmount($raw): ?string
+    {
+        if (is_int($raw)) {
+            return (string) $raw;
+        }
+        if (is_float($raw)) {
+            if (!is_finite($raw)) {
+                return null;
+            }
+            if ($raw < 0) {
+                return '-1';
+            }
+            $formatted = (string) $raw;
+            if (stripos($formatted, 'e') !== false) {
+                $formatted = rtrim(rtrim(sprintf('%.18F', $raw), '0'), '.');
+            }
+            return $formatted;
+        }
+        if (!is_string($raw)) {
+            return null;
+        }
+
+        $trimmed = trim($raw);
+        if ($trimmed === '') {
+            return null;
+        }
+        if (preg_match('/\A(0|[1-9][0-9]*)\.([0-9]+)\z/', $trimmed, $m) === 1) {
+            $frac = rtrim($m[2], '0');
+            if (strlen($m[2]) > 2 && strlen($frac) <= 2) {
+                return $m[1] . '.' . str_pad($frac, 2, '0');
+            }
+        }
+
+        return $trimmed;
     }
 
     /**
