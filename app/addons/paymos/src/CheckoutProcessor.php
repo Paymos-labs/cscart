@@ -207,7 +207,6 @@ final class CheckoutProcessor
             $candidates[] = array(
                 'title' => $this->productTitle($item),
                 'description' => $description,
-                'image_url' => $this->productImageUrl($item),
                 'quantity' => array_key_exists('quantity', $item)
                     ? $item['quantity']
                     : (array_key_exists('amount', $item) ? $item['amount'] : null),
@@ -263,58 +262,6 @@ final class CheckoutProcessor
         }
 
         return $base;
-    }
-
-    /**
-     * @param array<string, mixed> $item
-     */
-    private function productImageUrl(array $item): ?string
-    {
-        if (isset($item['image_url']) && is_string($item['image_url'])) {
-            return $item['image_url'];
-        }
-
-        if (isset($item['main_pair']) && is_array($item['main_pair'])) {
-            $fromPair = self::imageUrlFromPair($item['main_pair']);
-            if ($fromPair !== null) {
-                return $fromPair;
-            }
-        }
-
-        if (function_exists('fn_get_image_pairs') && isset($item['product_id']) && is_numeric($item['product_id']) && (int) $item['product_id'] > 0) {
-            try {
-                $pair = fn_get_image_pairs((int) $item['product_id'], 'product', 'M', true, true);
-                if (is_array($pair)) {
-                    return self::imageUrlFromPair($pair);
-                }
-            } catch (\Throwable $e) {
-                return null;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * @param array<string, mixed> $pair
-     */
-    private static function imageUrlFromPair(array $pair): ?string
-    {
-        $candidates = array(
-            $pair['detailed']['https_image_path'] ?? null,
-            $pair['icon']['https_image_path'] ?? null,
-            $pair['https_image_path'] ?? null,
-            $pair['detailed']['image_path'] ?? null,
-            $pair['icon']['image_path'] ?? null,
-            $pair['image_path'] ?? null,
-        );
-        foreach ($candidates as $candidate) {
-            if (is_string($candidate) && trim($candidate) !== '') {
-                return $candidate;
-            }
-        }
-
-        return null;
     }
 
     /**

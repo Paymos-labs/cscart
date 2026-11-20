@@ -466,11 +466,6 @@ function test_cscart_checkout_single_product_and_optional_fields()
                     array('option_name' => 'Color', 'variant_name' => 'Blue'),
                 ),
                 'short_description' => "<p>Museum grade</p><p>Cotton\0</p>",
-                'main_pair' => array(
-                    'detailed' => array(
-                        'https_image_path' => 'https://shop.example/images/canvas.webp',
-                    ),
-                ),
                 'amount' => '2',
                 'price' => '24.50',
             ),
@@ -487,14 +482,13 @@ function test_cscart_checkout_single_product_and_optional_fields()
                 'quantity' => 2,
                 'unit_amount' => '24.50',
                 'description' => "Museum grade\nCotton",
-                'image_url' => 'https://shop.example/images/canvas.webp',
             ),
         ),
         $payload['products'],
-        'single CS-Cart product must map options, description, HTTPS image, and unit price.'
+        'single CS-Cart product must map options, description, and unit price.'
     );
 
-    // Minimal product with blank short_description and http:// image omits optional fields without failing.
+    // Minimal product with blank short_description omits the optional field without failing.
     $minInvoices = new FakePaymosInvoices();
     $minProcessor = new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($minInvoices) {
         return new FakePaymosClient($minInvoices);
@@ -505,11 +499,6 @@ function test_cscart_checkout_single_product_and_optional_fields()
             '1002' => array(
                 'product' => 'Canvas · Blue',
                 'short_description' => '<p>&nbsp;</p>',
-                'main_pair' => array(
-                    'detailed' => array(
-                        'image_path' => 'http://shop.example/insecure.png',
-                    ),
-                ),
                 'amount' => 2,
                 'price' => '24.50',
             ),
@@ -519,7 +508,7 @@ function test_cscart_checkout_single_product_and_optional_fields()
     assertSameValue(
         array(array('title' => 'Canvas · Blue', 'quantity' => 2, 'unit_amount' => '24.50')),
         $minInvoices->payloads[0]['products'],
-        'blank short_description and http:// image_path must be omitted without failing item.'
+        'blank short_description must be omitted without failing item.'
     );
 
     // Three-decimal currency unit price keeps exact 3rd decimal digit.
@@ -551,7 +540,6 @@ function test_cscart_checkout_cart_products_and_all_or_nothing_fallback()
             '2001' => array(
                 'product' => 'Canvas · Blue',
                 'short_description' => '<p>Giclée print</p>',
-                'main_pair' => array('detailed' => array('https_image_path' => 'https://shop.example/canvas.webp')),
                 'amount' => 2,
                 'price' => '15.00',
             ),
@@ -574,7 +562,6 @@ function test_cscart_checkout_cart_products_and_all_or_nothing_fallback()
                 'quantity' => 2,
                 'unit_amount' => '15.00',
                 'description' => 'Giclée print',
-                'image_url' => 'https://shop.example/canvas.webp',
             ),
             array(
                 'title' => 'Notebook',
