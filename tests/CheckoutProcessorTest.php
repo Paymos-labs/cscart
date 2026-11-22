@@ -658,3 +658,34 @@ function test_cscart_checkout_retry_and_metadata_change_preserve_money_guards()
     assertSameValue('cscart_42_1', $invoices->payloads[2]['external_order_id'], 'bumped external_order_id must be used.');
     assertSameValue('Updated Product', $invoices->payloads[2]['products'][0]['title'], 'bumped invoice must include current products.');
 }
+
+function test_cscart_checkout_formats_float_unit_amounts_locale_independently()
+{
+    // BUG-1467: PHP 7.4 LC_NUMERIC comma-decimal locales must never turn float unit_amount into "24,5".
+    cscart_checkout_config_for_renewal();
+    $previousLocale = setlocale(LC_NUMERIC, '0');
+    setlocale(LC_NUMERIC, 'de_DE.UTF-8', 'de_DE', 'German_Germany.1252', 'fr_FR.UTF-8', 'French_France.1252');
+    try {
+        $invoices = new FakePaymosInvoices();
+        $processor = new CheckoutProcessor(new InMemoryInvoiceStore(), static function () use ($invoices) {
+            return new FakePaymosClient($invoices);
+        });
+        $processor->start(42, cscart_order(array(
+            'total' => '44.49',
+            'products' => array(
+                '1' => array('product' => 'Item A', 'amount' => 1, 'price' => 24.5),
+                '2' => array('product' => 'Item B', 'amount' => 1, 'price' => 19.99),
+                '3' => array('product' => 'Micro', 'amount' => 1, 'price' => 1e-9),
+                '4' => array('product' => 'Free', 'amount' => 1, 'price' => 0.0),
+            ),
+        )), cscart_processor_params());
+        assertSameValue('24.5', $invoices->payloads[0]['products'][0]['unit_amount'], 'Float 24.5 formats dot-decimal.');
+        assertSameValue('19.99', $invoices->payloads[0]['products'][1]['unit_amount'], 'Float 19.99 keeps exact cents.');
+        assertSameValue('0.000000001', $invoices->payloads[0]['products'][2]['unit_amount'], 'Scientific float formats dot-decimal.');
+        assertSameValue('0', $invoices->payloads[0]['products'][3]['unit_amount'], 'Zero float formats cleanly.');
+    } finally {
+        if (is_string($previousLocale)) {
+            setlocale(LC_NUMERIC, $previousLocale);
+        }
+    }
+}
