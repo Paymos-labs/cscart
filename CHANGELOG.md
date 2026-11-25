@@ -8,6 +8,10 @@ The public release history also lives at [paymos.io/changelog](https://paymos.io
 
 ## [Unreleased]
 
+## [1.7.6] - 2026-11-25
+
+- chore: rebuild canonical CMS package
+
 ## [1.7.5] - 2026-11-25
 
 - fix(cscart): use valid XmlScheme3 compatibility tags in addon.xml
