@@ -593,6 +593,9 @@ function test_cscart_refund_install_and_runtime_schema_agree_and_preserve_recove
     }
     assertSameValue(false, strpos($uninstall, 'DROP TABLE'), 'Reinstall cannot erase refund identity or credentials.');
     assertSameValue(1, preg_match('/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/D', (string) $xml->version), 'Plugin version must remain valid after release stamping; the package validator checks the exact planned version.');
+    assertSameValue('', trim((string) ($xml->compatibility->dependencies ?? '')), 'CS-Cart <dependencies> must not wrap nested tags or whitespace (XmlScheme2 splits it as add-on IDs).');
+    assertTrueValue(trim((string) ($xml->compatibility->core_version->min ?? '')) !== '', 'CS-Cart compatibility declares core_version min.');
+    assertTrueValue(trim((string) ($xml->compatibility->php_version->min ?? '')) !== '', 'CS-Cart compatibility declares php_version min.');
 }
 
 function test_cscart_refund_original_native_total_keeps_large_fractional_precision()
