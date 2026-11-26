@@ -1,9 +1,15 @@
 # Paymos for CS-Cart
 
+**English** | [简体中文](README.zh-CN.md) | [Русский](README.ru.md) | [Español](README.es.md) | [Deutsch](README.de.md) | [Türkçe](README.tr.md)
+
 Official Paymos add-on for CS-Cart, Multi-Vendor and Ultimate. It registers a payment processor
 called Paymos: the customer places the order, is redirected to the Paymos hosted checkout, and pays
 in a stablecoin from their own wallet. The order status moves on a signed webhook, once the transfer
 has confirmed on-chain.
+
+[![Watch: 12 Official CMS Crypto Plugins — 1-Click Connect (Paymos)](https://i.ytimg.com/vi/VMLUGVumYkg/maxresdefault.jpg)](https://www.youtube.com/watch?v=VMLUGVumYkg)
+
+> **Video walkthrough (1:12, subtitles in 6 languages):** [Watch on YouTube](https://www.youtube.com/watch?v=VMLUGVumYkg)
 
 ## Requirements
 
