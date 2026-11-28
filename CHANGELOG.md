@@ -8,6 +8,14 @@ The public release history also lives at [paymos.io/changelog](https://paymos.io
 
 ## [Unreleased]
 
+## [1.7.9] - 2026-11-28
+
+- fix(cscart): send refunds after an unavailable preflight read
+
+### Fixed
+- **Refund left unsent after an unavailable preflight read (`RefundAdapter`):** When the invoice read before a refund answered 429, 5xx or a network error, the refund stayed `not_submitted`, the order's refunds were blocked and nothing sent it until the 24-hour review. The operation's **Check** button and the cron sweep now send it once the read recovers.
+- **Accepted refund stuck after a temporary read failure (`RefundIntentStore`):** When the server accepted the refund but the read right after it answered a temporary 401/403/404, the refund stayed in `refund_read_unavailable` for good. The store now keeps the unverified withdrawal id (`RefundCandidateStoreInterface`), so the next check reads it again and records the refund in CS-Cart.
+
 ## [1.7.8] - 2026-11-27
 
 - chore: rebuild canonical CMS package

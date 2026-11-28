@@ -169,6 +169,8 @@ final class CsCartRefundTestTransport implements TransportInterface
     public $summaryAllowed = true;
     public $omitSummary = false;
     public $invoiceFailure = null;
+    /** Statuses the next refund reads answer with (temporary 401/403/404 after an accepted POST). */
+    public $refundReadFailures = array();
     public $invoiceStatus = 'paid_over';
     public $amounts = array('full' => '120', 'overpayment' => '20');
     public $invoiceAmount = '100';
@@ -235,6 +237,13 @@ final class CsCartRefundTestTransport implements TransportInterface
             }
         } else {
             $this->reads++;
+            if ($this->refundReadFailures) {
+                $status = (int) array_shift($this->refundReadFailures);
+                return new HttpResponse($status, json_encode(array(
+                    'type' => 'https://api.paymos.io/errors/unavailable', 'title' => 'Unavailable', 'status' => $status,
+                    'detail' => 'Simulated temporary refund read failure', 'code' => 'refund_not_found',
+                )), array('content-type' => 'application/problem+json'));
+            }
             $response = null;
             foreach ($this->refunds as $row) {
                 if ($path === '/v1/refunds/' . $row['withdrawal_id']) { $response = array_replace($row, $this->corruptRead); }
@@ -713,5 +722,56 @@ function test_cscart_refund_preflight_transient_failures_return_retry_and_determ
         assertSameValue('review', $refused->cashState(), 'Deterministic API refusal moves intent to review.');
         assertSameValue($expectedCode, $refused->toArray()['review_reason'], 'Review preserves API errorCode rather than generic preflight failure.');
         assertSameValue(array(), $http->posts, 'Deterministic refusal sends no POST.');
+    }
+}
+
+/**
+ * CMSP-27: the panel issues a new request token on every view, so the only
+ * way on for a refund whose preflight read was unavailable is the operation's
+ * Check button and the cron sweep. Both send it once the read recovers.
+ */
+function test_cscart_refund_preflight_retry_is_sent_by_the_next_check()
+{
+    foreach (array('check', 'cron') as $route) {
+        list($db, $store, $adapter, $http) = cscart_refund_fixture();
+        $http->invoiceFailure = 503;
+        $pending = $adapter->submit(42, 'full', 'cscart-check-retry-' . $route);
+        assertSameValue('not_submitted', $pending->cashState(), $route . ': the unavailable read leaves the refund unsent.');
+        assertSameValue(array(), $http->posts, $route . ': nothing is sent while the read is unavailable.');
+
+        if ($route === 'check') {
+            $adapter->reconcile($pending->operationId());
+        } else {
+            $db->clock += 60;
+            $adapter->reconcileDue(new DateTimeImmutable('@' . $db->clock));
+        }
+
+        $after = $store->getIntent($pending->operationId());
+        assertSameValue('created', $after->cashState(), $route . ': the refund is sent once the read recovers.');
+        assertSameValue(1, count($http->posts), $route . ': exactly one refund is sent.');
+    }
+}
+
+/**
+ * BUG-1347 (feature-audit 3.11): the server accepted the refund POST, but the
+ * reverse read right after it answered a temporary 401/403/404. The next
+ * reconcile reads again and the completed refund is projected.
+ */
+function test_cscart_refund_accepted_refund_survives_a_temporary_reverse_read_failure()
+{
+    foreach (array(401, 403, 404) as $status) {
+        list($db, $store, $adapter, $http) = cscart_refund_fixture();
+        $http->refundReadFailures = array($status);
+        $intent = $adapter->submit(42, 'full', 'cscart-read-retry-' . $status);
+        assertSameValue(1, count($http->posts), $status . ': the refund was accepted once.');
+
+        $http->status('completed');
+        $adapter->reconcile($intent->operationId());
+
+        $after = $store->getIntent($intent->operationId());
+        assertSameValue('wd_1', $after->withdrawalId(), $status . ': the accepted refund is bound after the read recovers.');
+        assertSameValue('completed', $after->cashState(), $status . ': the cash refund is completed.');
+        assertSameValue('applied', $after->projectionState(), $status . ': the refund is projected into CS-Cart.');
+        assertSameValue(1, count($http->posts), $status . ': no second refund is sent.');
     }
 }

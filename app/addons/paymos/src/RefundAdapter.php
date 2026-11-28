@@ -268,6 +268,13 @@ final class RefundAdapter implements NativeRefundProjectorInterface
         $intent = $this->store->getIntent($operationId);
         return $this->store->withPaymentLock($intent->paymentKey(), function () use ($intent) {
             $this->store->assertNativeConnection();
+            $current = $this->store->getIntent($intent->operationId());
+            // An intent left unsent by an unavailable preflight read is sent by the
+            // next check or sweep: the panel never reuses its request token.
+            if ($current->cashState() === RefundStates::NOT_SUBMITTED
+                && $current->projectionState() !== RefundStates::NATIVE_REVIEW) {
+                $this->coordinator($current)->submit($current->operationId());
+            }
             $action = $this->coordinator($intent)->reconcile($intent->operationId());
             $this->store->schedule($intent->operationId());
             return $action;
